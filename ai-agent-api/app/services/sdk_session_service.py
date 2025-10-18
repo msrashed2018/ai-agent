@@ -5,7 +5,7 @@ official Claude SDK and processing responses.
 """
 
 import logging
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Optional, Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,8 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.mcp_server_repository import MCPServerRepository
 from app.services.storage_manager import StorageManager
 from app.services.audit_service import AuditService
+from app.claude_sdk.execution.executor_factory import ExecutorFactory
+from app.claude_sdk.execution.base_executor import BaseExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -272,11 +274,91 @@ class SDKIntegratedSessionService(SessionService):
             hooks=hooks,
         )
 
+    async def execute_query(
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        query: str,
+    ) -> Any:
+        """Execute query using ExecutorFactory pattern (Phase 2 integration).
+
+        This is the new implementation that uses ExecutorFactory to create
+        appropriate executors based on session mode, with hooks and permissions
+        automatically wired in.
+
+        Args:
+            session_id: Session UUID
+            user_id: User UUID
+            query: User query text
+
+        Returns:
+            Execution result from executor
+
+        Raises:
+            SessionNotFoundError: Session doesn't exist
+            SessionNotActiveError: Session not in active state
+
+        Example:
+            >>> result = await service.execute_query(session_id, user_id, "Hello")
+        """
+        # 1. Get and validate session
+        session = await self.get_session(session_id, user_id)
+
+        if session.status not in [SessionStatus.CREATED, SessionStatus.ACTIVE, SessionStatus.CONNECTING]:
+            raise SessionNotActiveError(f"Session {session_id} is not in a valid state for messaging")
+
+        # 2. Update status to PROCESSING
+        session.transition_to(SessionStatus.PROCESSING)
+        await self.session_repo.update(session_id, status=SessionStatus.PROCESSING.value)
+        await self.db.commit()
+
+        try:
+            # 3. Create executor using ExecutorFactory
+            # This automatically wires in HookManager and PermissionManager
+            executor = await ExecutorFactory.create_executor(
+                session=session,
+                db=self.db,
+                event_broadcaster=self.event_broadcaster,
+            )
+
+            # 4. Execute query
+            logger.info(
+                f"Executing query for session {session_id} using {executor.__class__.__name__}",
+                extra={"session_id": str(session_id), "executor_type": executor.__class__.__name__}
+            )
+            result = await executor.execute(query)
+
+            # 5. Update status back to ACTIVE
+            session.transition_to(SessionStatus.ACTIVE)
+            await self.session_repo.update(session_id, status=SessionStatus.ACTIVE.value)
+            await self.db.commit()
+
+            return result
+
+        except Exception as e:
+            logger.error(
+                f"Error executing query in session {session_id}: {e}",
+                extra={"session_id": str(session_id)},
+                exc_info=True
+            )
+
+            # Mark session as failed
+            session.transition_to(SessionStatus.FAILED)
+            session.error_message = str(e)
+            await self.session_repo.update(
+                session_id,
+                status=SessionStatus.FAILED.value,
+                error_message=str(e),
+            )
+            await self.db.commit()
+
+            raise
+
     async def cleanup_session_client(self, session_id: UUID):
         """Disconnect SDK client for session.
-        
+
         Called when terminating or deleting a session.
-        
+
         Args:
             session_id: Session UUID
         """
