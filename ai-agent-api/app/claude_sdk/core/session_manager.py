@@ -1,6 +1,6 @@
 """Session manager for Claude SDK session lifecycle management."""
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from uuid import UUID
 from pathlib import Path
 
@@ -11,6 +11,8 @@ from app.claude_sdk.core.client import EnhancedClaudeClient
 from app.claude_sdk.core.config import ClientConfig
 from app.repositories.session_repository import SessionRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.working_directory_archive_repository import WorkingDirectoryArchiveRepository
+from app.claude_sdk.persistence.storage_archiver import StorageArchiver
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +39,28 @@ class SessionManager:
         >>> await manager.archive_session(session_id)
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(
+        self,
+        db: AsyncSession,
+        storage_archiver: Optional[StorageArchiver] = None
+    ):
         """Initialize session manager with database session.
 
         Args:
             db: Async database session for repository operations
+            storage_archiver: Optional storage archiver for working directory archival
         """
         self.db = db
         self.active_clients: Dict[UUID, EnhancedClaudeClient] = {}
         self.session_repo = SessionRepository(db)
         self.message_repo = MessageRepository(db)
+
+        # Initialize StorageArchiver if not provided
+        if storage_archiver is None:
+            archive_repo = WorkingDirectoryArchiveRepository(db)
+            self.storage_archiver = StorageArchiver(db, archive_repo)
+        else:
+            self.storage_archiver = storage_archiver
 
         logger.info("SessionManager initialized")
 
@@ -196,12 +210,20 @@ class SessionManager:
 
         return client
 
-    async def archive_session(self, session_id: UUID, archive_to_storage: bool = True):
+    async def archive_session(
+        self,
+        session_id: UUID,
+        archive_to_storage: bool = True,
+        storage_backend: str = "s3",
+        compression: str = "tar.gz"
+    ) -> Dict[str, Any]:
         """Archive session and cleanup resources.
 
         Args:
             session_id: Session to archive
-            archive_to_storage: Whether to upload working directory to S3
+            archive_to_storage: Whether to upload working directory to S3/storage
+            storage_backend: Storage backend to use (s3, filesystem)
+            compression: Compression type (tar.gz, zip)
 
         Returns:
             ArchiveResult: Archive metadata and status
@@ -210,9 +232,14 @@ class SessionManager:
             ValueError: If session not found or already archived
         """
         logger.info(
-            f"Archiving session: {session_id} (archive_to_storage={archive_to_storage})",
+            f"Archiving session: {session_id} (archive_to_storage={archive_to_storage}, backend={storage_backend})",
             extra={"session_id": str(session_id)},
         )
+
+        # Get session from database
+        session = await self.session_repo.get_by_id(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
 
         # Disconnect client if active
         if session_id in self.active_clients:
@@ -227,20 +254,57 @@ class SessionManager:
                 extra={"session_id": str(session_id), "metrics": metrics.to_dict()},
             )
 
-        # TODO: Archive working directory to storage
-        # This will be implemented in Phase 3 with StorageArchiver
-        if archive_to_storage:
-            logger.warning("Storage archival not yet implemented (Phase 3)")
+        # Archive working directory to storage
+        storage_path = None
+        archive_metadata = None
+
+        if archive_to_storage and session.working_directory_path:
+            try:
+                logger.info(
+                    f"Archiving working directory for session {session_id}",
+                    extra={"session_id": str(session_id), "backend": storage_backend}
+                )
+
+                archive_metadata = await self.storage_archiver.archive_working_directory(
+                    session_id=session_id,
+                    working_directory=Path(session.working_directory_path),
+                    storage_backend=storage_backend,
+                    compression_type=compression
+                )
+
+                storage_path = archive_metadata.archive_path
+
+                # Update session with archive_id
+                await self.session_repo.update(
+                    session_id,
+                    archive_id=archive_metadata.id
+                )
+                await self.db.commit()
+
+                logger.info(
+                    f"Working directory archived: {storage_path}",
+                    extra={"session_id": str(session_id), "archive_id": str(archive_metadata.id)}
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to archive working directory for session {session_id}: {str(e)}",
+                    extra={"session_id": str(session_id)},
+                    exc_info=True
+                )
+                # Don't fail the entire archive operation if storage upload fails
+                # The session metadata is still saved
 
         logger.info(
             f"Session archived successfully: {session_id}",
-            extra={"session_id": str(session_id)},
+            extra={"session_id": str(session_id), "storage_path": storage_path},
         )
 
         return {
             "session_id": session_id,
             "archived": True,
-            "storage_path": None,  # Will be set in Phase 3
+            "storage_path": storage_path,
+            "archive_metadata": archive_metadata.to_dict() if archive_metadata else None,
         }
 
     async def get_client(self, session_id: UUID) -> Optional[EnhancedClaudeClient]:
