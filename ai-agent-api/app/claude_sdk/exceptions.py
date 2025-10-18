@@ -35,3 +35,9 @@ class PermissionDeniedError(SDKError):
     """Raised when tool permission is denied."""
 
     pass
+
+
+class CircuitBreakerOpenError(SDKError):
+    """Raised when circuit breaker is open and request is rejected."""
+
+    pass
