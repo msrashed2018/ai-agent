@@ -1,6 +1,6 @@
 """Session domain entity."""
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 
@@ -23,6 +23,7 @@ class SessionMode(str, Enum):
     """Session mode enumeration."""
     INTERACTIVE = "interactive"
     NON_INTERACTIVE = "non_interactive"
+    FORKED = "forked"
 
 
 class Session:
@@ -47,11 +48,26 @@ class Session:
         self.parent_session_id: Optional[UUID] = None
         self.is_fork = False
 
+        # SDK Configuration (Phase 1 - New)
+        self.include_partial_messages = False
+        self.max_retries = 3
+        self.retry_delay = 2.0
+        self.timeout_seconds = 120
+        self.hooks_enabled: List[str] = []
+        self.permission_mode = "default"
+        self.custom_policies: List[str] = []
+
         # Metrics
         self.total_messages = 0
         self.total_tool_calls = 0
         self.total_cost_usd = 0.0
         self.duration_ms: Optional[int] = None
+
+        # Advanced Metrics (Phase 1 - New)
+        self.total_hook_executions = 0
+        self.total_permission_checks = 0
+        self.total_errors = 0
+        self.total_retries = 0
 
         # API Usage
         self.api_input_tokens = 0
@@ -62,6 +78,10 @@ class Session:
         # Result
         self.result_data: Optional[dict] = None
         self.error_message: Optional[str] = None
+
+        # Archival and Templates (Phase 1 - New)
+        self.archive_id: Optional[UUID] = None
+        self.template_id: Optional[UUID] = None
 
         # Timestamps
         self.created_at = datetime.utcnow()
@@ -165,4 +185,24 @@ class Session:
     def set_error(self, error_message: str) -> None:
         """Set session error message."""
         self.error_message = error_message
+        self.updated_at = datetime.utcnow()
+
+    def increment_hook_execution_count(self) -> None:
+        """Increment total hook execution counter."""
+        self.total_hook_executions += 1
+        self.updated_at = datetime.utcnow()
+
+    def increment_permission_check_count(self) -> None:
+        """Increment total permission check counter."""
+        self.total_permission_checks += 1
+        self.updated_at = datetime.utcnow()
+
+    def increment_error_count(self) -> None:
+        """Increment total error counter."""
+        self.total_errors += 1
+        self.updated_at = datetime.utcnow()
+
+    def increment_retry_count(self) -> None:
+        """Increment total retry counter."""
+        self.total_retries += 1
         self.updated_at = datetime.utcnow()

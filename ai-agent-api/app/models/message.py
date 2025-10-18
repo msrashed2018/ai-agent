@@ -1,7 +1,7 @@
 """Message database model."""
 from datetime import datetime
 from uuid import uuid4
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, CheckConstraint, Index
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, CheckConstraint, Index, Boolean, Text
 from sqlalchemy.dialects.postgresql import UUID
 from app.database.base import JSONB
 from sqlalchemy.orm import relationship
@@ -25,7 +25,12 @@ class MessageModel(Base):
     # Metadata
     model = Column(String(100))  # AI model used (for assistant messages)
     parent_tool_use_id = Column(String(255))
-    
+
+    # Phase 1 - Streaming Support
+    is_partial = Column(Boolean, default=False)  # For streaming partial messages
+    parent_message_id = Column(UUID(as_uuid=True), ForeignKey("messages.id"), index=True)
+    thinking_content = Column(Text)  # Claude's thinking/reasoning content
+
     # Sequence
     sequence_number = Column(Integer, nullable=False)
     

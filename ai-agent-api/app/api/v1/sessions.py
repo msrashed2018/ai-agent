@@ -20,7 +20,11 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_active_user, get_db_session
+from app.api.dependencies import (
+    get_current_active_user,
+    get_db_session,
+    get_metrics_collector,
+)
 from app.domain.entities import User
 from app.repositories.session_repository import SessionRepository
 from app.repositories.message_repository import MessageRepository
@@ -35,6 +39,12 @@ from app.schemas.session import (
     SessionResumeRequest,
     MessageResponse,
     ToolCallResponse,
+    SessionForkRequest,
+    SessionArchiveRequest,
+    HookExecutionResponse,
+    PermissionDecisionResponse,
+    ArchiveMetadataResponse,
+    MetricsSnapshotResponse,
 )
 from app.schemas.common import PaginationParams, PaginatedResponse, Links
 from app.schemas.mappers import session_to_response
@@ -694,3 +704,331 @@ async def _cleanup_temp_file(filepath: str) -> None:
         Path(filepath).unlink()
     except Exception:
         pass  # Ignore cleanup errors
+
+
+# Phase 4: Advanced Session Endpoints
+
+@router.post("/{session_id}/fork", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+async def fork_session_endpoint(
+    session_id: UUID,
+    request: SessionForkRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> SessionResponse:
+    """
+    Fork an existing session.
+
+    Creates a new session based on an existing session's configuration and optionally
+    its working directory contents. The forked session can continue from a specific
+    message in the conversation history.
+    """
+    from app.schemas.session import SessionForkRequest
+    from app.services.session_service import SessionService
+    from app.repositories.user_repository import UserRepository
+    from app.services.storage_manager import StorageManager
+    from app.services.audit_service import AuditService
+
+    session_repo = SessionRepository(db)
+    message_repo = MessageRepository(db)
+    tool_call_repo = ToolCallRepository(db)
+    user_repo = UserRepository(db)
+    storage_manager = StorageManager()
+    audit_service = AuditService(db)
+
+    service = SessionService(
+        db=db,
+        session_repo=session_repo,
+        message_repo=message_repo,
+        tool_call_repo=tool_call_repo,
+        user_repo=user_repo,
+        storage_manager=storage_manager,
+        audit_service=audit_service,
+    )
+
+    # Fork session
+    forked_session = await service.fork_session_advanced(
+        parent_session_id=session_id,
+        user_id=current_user.id,
+        fork_at_message=request.fork_at_message,
+        name=request.name,
+    )
+
+    # Convert to response
+    from app.schemas.mappers import session_to_response
+    response = session_to_response(forked_session)
+    response._links = Links(
+        self=f"/api/v1/sessions/{forked_session.id}",
+        parent=f"/api/v1/sessions/{session_id}",
+        query=f"/api/v1/sessions/{forked_session.id}/query",
+    )
+
+    return response
+
+
+@router.post("/{session_id}/archive", response_model=ArchiveMetadataResponse)
+async def archive_session_endpoint(
+    session_id: UUID,
+    request: SessionArchiveRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> ArchiveMetadataResponse:
+    """
+    Archive session's working directory.
+
+    Creates a compressed archive of the session's working directory and uploads it
+    to configured storage (S3 or filesystem). The archive includes all files created
+    during the session.
+    """
+    from app.schemas.session import SessionArchiveRequest, ArchiveMetadataResponse
+    from app.services.session_service import SessionService
+    from app.repositories.user_repository import UserRepository
+    from app.services.storage_manager import StorageManager
+    from app.services.audit_service import AuditService
+
+    session_repo = SessionRepository(db)
+    message_repo = MessageRepository(db)
+    tool_call_repo = ToolCallRepository(db)
+    user_repo = UserRepository(db)
+    storage_manager = StorageManager()
+    audit_service = AuditService(db)
+
+    service = SessionService(
+        db=db,
+        session_repo=session_repo,
+        message_repo=message_repo,
+        tool_call_repo=tool_call_repo,
+        user_repo=user_repo,
+        storage_manager=storage_manager,
+        audit_service=audit_service,
+    )
+
+    # Archive session
+    archive_metadata = await service.archive_session_to_storage(
+        session_id=session_id,
+        user_id=current_user.id,
+        upload_to_s3=request.upload_to_s3,
+    )
+
+    # Convert to response
+    return ArchiveMetadataResponse(
+        id=archive_metadata.id,
+        session_id=archive_metadata.session_id,
+        archive_path=archive_metadata.archive_path,
+        size_bytes=archive_metadata.size_bytes,
+        compression=archive_metadata.compression,
+        manifest=archive_metadata.manifest,
+        status=archive_metadata.status.value,
+        error_message=archive_metadata.error_message,
+        archived_at=archive_metadata.archived_at,
+        created_at=archive_metadata.created_at,
+        updated_at=archive_metadata.updated_at,
+    )
+
+
+@router.get("/{session_id}/archive", response_model=ArchiveMetadataResponse)
+async def get_session_archive(
+    session_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> ArchiveMetadataResponse:
+    """
+    Get archive metadata for a session.
+
+    Returns information about the session's archived working directory,
+    including size, location, and manifest of archived files.
+    """
+    from app.schemas.session import ArchiveMetadataResponse
+    from app.repositories.working_directory_archive_repository import (
+        WorkingDirectoryArchiveRepository
+    )
+
+    # Check session ownership
+    repo = SessionRepository(db)
+    session = await repo.get_by_id(str(session_id))
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    if session.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this session",
+        )
+
+    # Get archive metadata
+    archive_repo = WorkingDirectoryArchiveRepository(db)
+    archives = await archive_repo.get_by_session(str(session_id))
+
+    if not archives:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No archive found for session {session_id}",
+        )
+
+    archive = archives[0]  # Get most recent
+    return ArchiveMetadataResponse.model_validate(archive)
+
+
+@router.get("/{session_id}/hooks", response_model=List[HookExecutionResponse])
+async def get_session_hooks(
+    session_id: UUID,
+    limit: int = Query(50, ge=1, le=100, description="Number of hook executions to return"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> List[HookExecutionResponse]:
+    """
+    Get hook execution history for a session.
+
+    Returns a list of all hook executions that occurred during the session,
+    including hook type, input/output data, and execution results.
+    """
+    from app.schemas.session import HookExecutionResponse
+    from app.repositories.hook_execution_repository import HookExecutionRepository
+
+    # Check session ownership
+    repo = SessionRepository(db)
+    session = await repo.get_by_id(str(session_id))
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    if session.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this session",
+        )
+
+    # Get hook executions
+    hook_repo = HookExecutionRepository(db)
+    hooks = await hook_repo.get_by_session(str(session_id), limit=limit)
+
+    return [HookExecutionResponse.model_validate(hook) for hook in hooks]
+
+
+@router.get("/{session_id}/permissions", response_model=List[PermissionDecisionResponse])
+async def get_session_permissions(
+    session_id: UUID,
+    limit: int = Query(50, ge=1, le=100, description="Number of permission decisions to return"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> List[PermissionDecisionResponse]:
+    """
+    Get permission decision history for a session.
+
+    Returns a list of all permission decisions made during the session,
+    including tool names, decisions (allow/deny), and reasons.
+    """
+    from app.schemas.session import PermissionDecisionResponse
+    from app.repositories.permission_decision_repository import PermissionDecisionRepository
+
+    # Check session ownership
+    repo = SessionRepository(db)
+    session = await repo.get_by_id(str(session_id))
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    if session.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this session",
+        )
+
+    # Get permission decisions
+    perm_repo = PermissionDecisionRepository(db)
+    decisions = await perm_repo.get_by_session(str(session_id), limit=limit)
+
+    return [PermissionDecisionResponse.model_validate(decision) for decision in decisions]
+
+
+@router.get("/{session_id}/metrics/snapshots", response_model=List[MetricsSnapshotResponse])
+async def get_session_metrics_snapshots(
+    session_id: UUID,
+    limit: int = Query(50, ge=1, le=100, description="Number of snapshots to return"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> List[MetricsSnapshotResponse]:
+    """
+    Get historical metrics snapshots for a session.
+
+    Returns time-series data of session metrics including costs, token usage,
+    and performance statistics captured at different points during execution.
+    """
+    from app.schemas.session import MetricsSnapshotResponse
+    from app.repositories.session_metrics_snapshot_repository import (
+        SessionMetricsSnapshotRepository
+    )
+
+    # Check session ownership
+    repo = SessionRepository(db)
+    session = await repo.get_by_id(str(session_id))
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    if session.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this session",
+        )
+
+    # Get metrics snapshots
+    metrics_repo = SessionMetricsSnapshotRepository(db)
+    snapshots = await metrics_repo.get_by_session(str(session_id), limit=limit)
+
+    return [MetricsSnapshotResponse.model_validate(snapshot) for snapshot in snapshots]
+
+
+@router.get("/{session_id}/metrics/current")
+async def get_current_metrics(
+    session_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+    metrics_collector = Depends(get_metrics_collector),
+):
+    """
+    Get current session metrics.
+
+    Returns real-time metrics for the session including costs, token usage,
+    message counts, and tool call statistics.
+    """
+    from app.api.dependencies import get_metrics_collector
+
+    # Check session ownership
+    repo = SessionRepository(db)
+    session = await repo.get_by_id(str(session_id))
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    if session.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this session",
+        )
+
+    # Get current metrics
+    metrics = await metrics_collector.get_session_metrics(session_id)
+
+    if not metrics:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Metrics not found for session",
+        )
+
+    return metrics

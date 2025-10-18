@@ -5,6 +5,9 @@ from app.domain.entities.task import Task
 from app.domain.entities.report import Report, ReportType, ReportFormat
 from app.domain.entities.user import User, UserRole
 from app.domain.entities.mcp_server import MCPServer
+from app.domain.entities.hook_execution import HookExecution
+from app.domain.entities.permission_decision import PermissionDecision, PermissionResult
+from app.domain.entities.archive_metadata import ArchiveMetadata
 
 __all__ = [
     "Session",
@@ -19,4 +22,8 @@ __all__ = [
     "User",
     "UserRole",
     "MCPServer",
+    "HookExecution",
+    "PermissionDecision",
+    "PermissionResult",
+    "ArchiveMetadata",
 ]

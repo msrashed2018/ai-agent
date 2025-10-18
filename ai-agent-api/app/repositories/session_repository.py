@@ -217,3 +217,30 @@ class SessionRepository(BaseRepository[SessionModel]):
         result = await self.db.execute(stmt)
         await self.db.flush()
         return result.rowcount > 0
+
+    async def get_sessions_with_archives(
+        self,
+        user_id: Optional[UUID] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[SessionModel]:
+        """Get sessions that have archived working directories.
+
+        Phase 1 - New method to retrieve sessions with archives.
+        """
+        filters = [
+            SessionModel.archive_id.isnot(None),
+            SessionModel.deleted_at.is_(None)
+        ]
+
+        if user_id:
+            filters.append(SessionModel.user_id == user_id)
+
+        result = await self.db.execute(
+            select(SessionModel)
+            .where(and_(*filters))
+            .order_by(SessionModel.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())

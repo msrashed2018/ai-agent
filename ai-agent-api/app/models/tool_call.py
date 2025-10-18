@@ -38,7 +38,12 @@ class ToolCallModel(Base):
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     duration_ms = Column(Integer)
-    
+
+    # Phase 1 - Advanced Execution Metrics
+    retries = Column(Integer, default=0)
+    hook_pre_data = Column(JSONB)  # Data from pre-tool-use hook
+    hook_post_data = Column(JSONB)  # Data from post-tool-use hook
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

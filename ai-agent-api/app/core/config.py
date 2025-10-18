@@ -99,6 +99,54 @@ class Settings(BaseSettings):
     enable_scheduled_tasks: bool = True
     enable_report_generation: bool = True
 
+    # Phase 4: Claude SDK Settings
+    claude_sdk_default_model: str = "claude-sonnet-4-5"
+    claude_sdk_max_retries: int = 3
+    claude_sdk_retry_delay: float = 2.0
+    claude_sdk_timeout_seconds: int = 120
+    claude_sdk_default_permission_mode: str = "default"
+
+    # Phase 4: Storage & Archival Settings
+    storage_provider: str = "filesystem"  # 'filesystem' or 's3'
+    aws_s3_bucket: str = "ai-agent-archives"
+    aws_s3_region: str = "us-east-1"
+    aws_s3_archive_prefix: str = "archives/"
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    archive_compression: str = "gzip"
+    archive_auto_cleanup: bool = True
+    archive_retention_days: int = 90
+
+    # Phase 4: Session Limits
+    max_concurrent_interactive_sessions: int = 10
+    max_concurrent_background_sessions: int = 50
+    session_idle_timeout_minutes: int = 30
+    session_auto_archive_days: int = 180
+
+    # Phase 4: Metrics & Monitoring
+    enable_metrics_collection: bool = True
+    metrics_snapshot_interval_seconds: int = 60
+    enable_cost_tracking: bool = True
+    user_monthly_budget_usd: float = 100.0
+    enable_performance_monitoring: bool = True
+
+    # Phase 4: Hooks Settings
+    enable_audit_hook: bool = True
+    enable_metrics_hook: bool = True
+    enable_validation_hook: bool = True
+    enable_notification_hook: bool = False
+    hook_execution_timeout_ms: int = 5000
+
+    # Phase 4: Permissions Settings
+    enable_custom_policies: bool = True
+    permission_cache_ttl_seconds: int = 300
+    default_blocked_commands: List[str] = Field(
+        default=["rm -rf /", "sudo rm", "format", "mkfs", "dd if="]
+    )
+    default_restricted_paths: List[str] = Field(
+        default=["/etc/passwd", "/etc/shadow", "~/.ssh", "~/.aws/credentials"]
+    )
+
 
 # Global settings instance
 settings = Settings()

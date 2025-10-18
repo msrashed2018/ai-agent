@@ -2,8 +2,10 @@
 from typing import Optional, AsyncIterator
 from uuid import UUID, uuid4
 from datetime import datetime
+from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
 from app.domain.entities.session import Session, SessionStatus, SessionMode
 from app.domain.value_objects.message import Message, MessageType
 from app.domain.value_objects.tool_call import ToolCall, ToolCallStatus
@@ -20,6 +22,9 @@ from app.repositories.tool_call_repository import ToolCallRepository
 from app.repositories.user_repository import UserRepository
 from app.services.storage_manager import StorageManager
 from app.services.audit_service import AuditService
+
+
+logger = get_logger(__name__)
 
 
 class SessionService:
@@ -323,7 +328,7 @@ class SessionService:
     def _tool_call_model_to_value_object(self, model) -> ToolCall:
         """Convert tool call model to value object."""
         from app.domain.value_objects.tool_call import PermissionDecision
-        
+
         return ToolCall(
             id=model.id,
             session_id=model.session_id,
@@ -342,3 +347,163 @@ class SessionService:
             completed_at=model.completed_at,
             duration_ms=model.duration_ms,
         )
+
+    async def fork_session_advanced(
+        self,
+        parent_session_id: UUID,
+        user_id: UUID,
+        fork_at_message: Optional[int] = None,
+        name: Optional[str] = None
+    ) -> Session:
+        """Fork an existing session with advanced options."""
+        from pathlib import Path
+        import shutil
+
+        # Get parent session
+        parent = await self.get_session(parent_session_id, user_id)
+
+        # Create forked session
+        forked_session = await self.create_session(
+            user_id=user_id,
+            mode=SessionMode.FORKED,
+            sdk_options=parent.sdk_options,
+            name=name or f"{parent.name} (fork)" if parent.name else "Forked session",
+            parent_session_id=parent.id,
+        )
+
+        # Copy working directory if exists
+        if parent.working_directory_path and Path(parent.working_directory_path).exists():
+            try:
+                parent_workdir = Path(parent.working_directory_path)
+                forked_workdir = Path(forked_session.working_directory_path)
+
+                # Copy all files from parent to forked session
+                for item in parent_workdir.rglob("*"):
+                    if item.is_file():
+                        rel_path = item.relative_to(parent_workdir)
+                        dest_path = forked_workdir / rel_path
+                        dest_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(item, dest_path)
+
+                logger.info(
+                    f"Copied working directory from parent {parent_session_id} to forked session {forked_session.id}"
+                )
+            except Exception as e:
+                logger.error(f"Failed to copy working directory: {e}")
+
+        # Log fork action
+        await self.audit_service.log_session_forked(
+            session_id=forked_session.id,
+            parent_session_id=parent.id,
+            user_id=user_id,
+            fork_at_message=fork_at_message,
+        )
+
+        await self.db.commit()
+        return forked_session
+
+    async def archive_session_to_storage(
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        upload_to_s3: bool = True
+    ):
+        """Archive a session's working directory to storage."""
+        from pathlib import Path
+        from app.claude_sdk.persistence.storage_archiver import StorageArchiver
+        from app.core.config import settings
+
+        # Get session
+        session = await self.get_session(session_id, user_id)
+
+        if not session.working_directory_path:
+            raise ValueError(f"Session {session_id} has no working directory")
+
+        workdir = Path(session.working_directory_path)
+        if not workdir.exists():
+            raise ValueError(f"Working directory {workdir} does not exist")
+
+        # Create archiver
+        provider = "s3" if upload_to_s3 and settings.storage_provider == "s3" else "filesystem"
+        archiver = StorageArchiver(
+            provider=provider,
+            bucket=settings.aws_s3_bucket if provider == "s3" else None,
+            region=settings.aws_s3_region if provider == "s3" else None
+        )
+
+        # Archive working directory
+        archive_metadata = await archiver.archive_working_directory(
+            session_id=session.id,
+            working_dir=workdir
+        )
+
+        # Persist archive metadata to database
+        from app.repositories.working_directory_archive_repository import (
+            WorkingDirectoryArchiveRepository
+        )
+        archive_repo = WorkingDirectoryArchiveRepository(self.db)
+        await archive_repo.create(
+            session_id=session.id,
+            archive_path=archive_metadata.archive_path,
+            size_bytes=archive_metadata.size_bytes,
+            compression=archive_metadata.compression,
+            manifest=archive_metadata.manifest,
+            status=archive_metadata.status.value,
+            archived_at=archive_metadata.archived_at,
+        )
+
+        # Log archival
+        await self.audit_service.log_session_archived(
+            session_id=session.id,
+            user_id=user_id,
+            archive_path=archive_metadata.archive_path,
+            size_bytes=archive_metadata.size_bytes,
+        )
+
+        await self.db.commit()
+        return archive_metadata
+
+    async def retrieve_archive(
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        extract_to: Optional[Path] = None
+    ) -> Path:
+        """Retrieve and extract archived working directory."""
+        from pathlib import Path
+        from app.claude_sdk.persistence.storage_archiver import StorageArchiver
+        from app.repositories.working_directory_archive_repository import (
+            WorkingDirectoryArchiveRepository
+        )
+
+        # Verify access
+        session = await self.get_session(session_id, user_id)
+
+        # Get archive metadata
+        archive_repo = WorkingDirectoryArchiveRepository(self.db)
+        archives = await archive_repo.get_by_session(str(session_id))
+
+        if not archives:
+            raise ValueError(f"No archive found for session {session_id}")
+
+        archive = archives[0]  # Get most recent archive
+
+        # Create archiver
+        from app.core.config import settings
+        archiver = StorageArchiver(
+            provider=settings.storage_provider,
+            bucket=settings.aws_s3_bucket if settings.storage_provider == "s3" else None,
+            region=settings.aws_s3_region if settings.storage_provider == "s3" else None
+        )
+
+        # Determine extraction path
+        if not extract_to:
+            extract_to = Path(session.working_directory_path or f"/tmp/session-{session_id}")
+
+        # Retrieve and extract archive
+        extracted_path = await archiver.retrieve_archive(
+            session_id=session.id,
+            extract_to=extract_to
+        )
+
+        return extracted_path

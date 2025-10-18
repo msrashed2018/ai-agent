@@ -11,6 +11,10 @@ from app.models.mcp_server import MCPServerModel
 from app.models.hook import HookModel
 from app.models.working_directory import WorkingDirectoryModel
 from app.models.audit_log import AuditLogModel
+from app.models.hook_execution import HookExecutionModel
+from app.models.permission_decision import PermissionDecisionModel
+from app.models.working_directory_archive import WorkingDirectoryArchiveModel
+from app.models.session_metrics_snapshot import SessionMetricsSnapshotModel
 
 __all__ = [
     "OrganizationModel",
@@ -26,4 +30,8 @@ __all__ = [
     "HookModel",
     "WorkingDirectoryModel",
     "AuditLogModel",
+    "HookExecutionModel",
+    "PermissionDecisionModel",
+    "WorkingDirectoryArchiveModel",
+    "SessionMetricsSnapshotModel",
 ]

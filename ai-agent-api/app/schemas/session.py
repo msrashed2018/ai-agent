@@ -22,6 +22,28 @@ class SessionCreateRequest(BaseModel):
     sdk_options: Optional[Dict[str, Any]] = Field(None, description="Claude SDK options override")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Custom metadata")
 
+    # Phase 4: Session mode
+    mode: Optional[str] = Field("interactive", description="Session mode: interactive, background, forked")
+
+    # Phase 4: Parent session (for forking)
+    parent_session_id: Optional[UUID] = Field(None, description="Parent session ID (for forking)")
+    fork_at_message: Optional[int] = Field(None, description="Fork from message index")
+
+    # Phase 4: Streaming configuration
+    include_partial_messages: Optional[bool] = Field(False, description="Enable real-time streaming")
+
+    # Phase 4: Retry configuration
+    max_retries: Optional[int] = Field(3, description="Max retry attempts")
+    retry_delay: Optional[float] = Field(2.0, description="Retry delay in seconds")
+    timeout_seconds: Optional[int] = Field(120, description="Timeout in seconds")
+
+    # Phase 4: Hooks configuration
+    hooks_enabled: Optional[List[str]] = Field([], description="Enabled hook types")
+
+    # Phase 4: Permission configuration
+    permission_mode: Optional[str] = Field("default", description="Permission mode")
+    custom_policies: Optional[List[str]] = Field([], description="Custom policy names")
+
 
 class SessionResponse(BaseModel):
     """Session response."""
@@ -101,9 +123,9 @@ class MessageResponse(BaseModel):
 
 class ToolCallResponse(BaseModel):
     """Tool call response."""
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: UUID = Field(..., description="Tool call UUID")
     session_id: UUID = Field(..., description="Session UUID")
     tool_use_message_id: Optional[UUID] = Field(None, description="Message with tool_use block")
@@ -117,3 +139,89 @@ class ToolCallResponse(BaseModel):
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
     duration_ms: Optional[int] = Field(None, description="Execution duration in milliseconds")
     created_at: datetime = Field(..., description="Creation timestamp")
+
+
+# Phase 4: New schemas for advanced features
+
+class SessionForkRequest(BaseModel):
+    """Fork session request."""
+    name: Optional[str] = Field(None, description="Name for forked session")
+    fork_at_message: Optional[int] = Field(None, description="Fork from message index")
+    include_working_directory: bool = Field(True, description="Copy working directory files")
+
+
+class SessionArchiveRequest(BaseModel):
+    """Archive session request."""
+    upload_to_s3: bool = Field(True, description="Upload archive to S3")
+    compression: str = Field("gzip", description="Compression algorithm")
+
+
+class HookExecutionResponse(BaseModel):
+    """Hook execution response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(..., description="Hook execution UUID")
+    session_id: UUID = Field(..., description="Session UUID")
+    hook_type: str = Field(..., description="Hook type")
+    hook_name: str = Field(..., description="Hook name")
+    tool_use_id: Optional[str] = Field(None, description="Associated tool use ID")
+    input_data: Dict[str, Any] = Field(..., description="Hook input data")
+    output_data: Dict[str, Any] = Field(..., description="Hook output data")
+    continue_execution: bool = Field(..., description="Whether execution should continue")
+    executed_at: datetime = Field(..., description="Execution timestamp")
+    duration_ms: Optional[int] = Field(None, description="Execution duration")
+
+
+class PermissionDecisionResponse(BaseModel):
+    """Permission decision response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(..., description="Permission decision UUID")
+    session_id: UUID = Field(..., description="Session UUID")
+    tool_name: str = Field(..., description="Tool name")
+    input_data: Dict[str, Any] = Field(..., description="Tool input data")
+    context: Dict[str, Any] = Field(..., description="Permission context")
+    decision: str = Field(..., description="Decision (allow/deny)")
+    reason: Optional[str] = Field(None, description="Decision reason")
+    interrupted: bool = Field(..., description="Whether execution was interrupted")
+    decided_at: datetime = Field(..., description="Decision timestamp")
+
+
+class ArchiveMetadataResponse(BaseModel):
+    """Archive metadata response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(..., description="Archive metadata UUID")
+    session_id: UUID = Field(..., description="Session UUID")
+    archive_path: str = Field(..., description="Archive file path or S3 URL")
+    size_bytes: int = Field(..., description="Archive size in bytes")
+    compression: str = Field(..., description="Compression algorithm")
+    manifest: Dict[str, Any] = Field(..., description="Archive manifest")
+    status: str = Field(..., description="Archive status")
+    error_message: Optional[str] = Field(None, description="Error message if failed")
+    archived_at: Optional[datetime] = Field(None, description="Archive timestamp")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class MetricsSnapshotResponse(BaseModel):
+    """Metrics snapshot response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(..., description="Snapshot UUID")
+    session_id: UUID = Field(..., description="Session UUID")
+    total_messages: int = Field(..., description="Total messages")
+    total_tool_calls: int = Field(..., description="Total tool calls")
+    total_errors: int = Field(..., description="Total errors")
+    total_retries: int = Field(..., description="Total retries")
+    total_cost_usd: float = Field(..., description="Total cost in USD")
+    total_input_tokens: int = Field(..., description="Total input tokens")
+    total_output_tokens: int = Field(..., description="Total output tokens")
+    total_cache_creation_tokens: int = Field(..., description="Total cache creation tokens")
+    total_cache_read_tokens: int = Field(..., description="Total cache read tokens")
+    total_duration_ms: int = Field(..., description="Total duration in milliseconds")
+    created_at: datetime = Field(..., description="Snapshot timestamp")

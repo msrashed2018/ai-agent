@@ -199,6 +199,74 @@ async def get_websocket_user(
         raise
 
 
+async def get_session_manager(
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Get SessionManager instance."""
+    from app.claude_sdk.core.session_manager import SessionManager
+    return SessionManager(db)
+
+
+async def get_hook_manager(
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Get HookManager instance."""
+    from app.claude_sdk.hooks.hook_manager import HookManager
+    from app.repositories.hook_execution_repository import HookExecutionRepository
+    return HookManager(db, HookExecutionRepository(db))
+
+
+async def get_permission_manager(
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Get PermissionManager instance."""
+    from app.claude_sdk.permissions.permission_manager import PermissionManager
+    from app.claude_sdk.permissions.policy_engine import PolicyEngine
+    from app.repositories.permission_decision_repository import PermissionDecisionRepository
+
+    policy_engine = PolicyEngine()
+    # Register default policies
+    # TODO: Load and register policies based on configuration
+
+    return PermissionManager(db, policy_engine, PermissionDecisionRepository(db))
+
+
+async def get_storage_archiver():
+    """Get StorageArchiver instance."""
+    from app.claude_sdk.persistence.storage_archiver import StorageArchiver
+    from app.core.config import settings
+
+    return StorageArchiver(
+        provider=settings.storage_provider,
+        bucket=settings.aws_s3_bucket if settings.storage_provider == "s3" else None,
+        region=settings.aws_s3_region if settings.storage_provider == "s3" else None
+    )
+
+
+async def get_metrics_collector(
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Get MetricsCollector instance."""
+    from app.claude_sdk.monitoring.metrics_collector import MetricsCollector
+    return MetricsCollector(db)
+
+
+async def get_cost_tracker(
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Get CostTracker instance."""
+    from app.claude_sdk.monitoring.cost_tracker import CostTracker
+    return CostTracker(db)
+
+
+async def get_health_checker(
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Get HealthChecker instance."""
+    from app.claude_sdk.monitoring.health_checker import HealthChecker
+    return HealthChecker(db)
+
+
 __all__ = [
     "get_current_user",
     "get_current_active_user",
@@ -206,4 +274,11 @@ __all__ = [
     "get_optional_user",
     "get_websocket_user",
     "get_db_session",
+    "get_session_manager",
+    "get_hook_manager",
+    "get_permission_manager",
+    "get_storage_archiver",
+    "get_metrics_collector",
+    "get_cost_tracker",
+    "get_health_checker",
 ]

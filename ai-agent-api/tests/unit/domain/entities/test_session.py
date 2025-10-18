@@ -54,6 +54,7 @@ class TestSessionEntity:
             sdk_options={},
         )
 
+        # Original metrics
         assert session.total_messages == 0
         assert session.total_tool_calls == 0
         assert session.total_cost_usd == 0.0
@@ -62,6 +63,34 @@ class TestSessionEntity:
         assert session.api_output_tokens == 0
         assert session.api_cache_creation_tokens == 0
         assert session.api_cache_read_tokens == 0
+
+        # Phase 1 - New advanced metrics
+        assert session.total_hook_executions == 0
+        assert session.total_permission_checks == 0
+        assert session.total_errors == 0
+        assert session.total_retries == 0
+
+    def test_phase1_configuration_initialized(self):
+        """Test Phase 1 SDK configuration fields are initialized."""
+        session = Session(
+            id=uuid4(),
+            user_id=uuid4(),
+            mode=SessionMode.INTERACTIVE,
+            sdk_options={},
+        )
+
+        # Phase 1 - SDK Configuration
+        assert session.include_partial_messages is False
+        assert session.max_retries == 3
+        assert session.retry_delay == 2.0
+        assert session.timeout_seconds == 120
+        assert session.hooks_enabled == []
+        assert session.permission_mode == "default"
+        assert session.custom_policies == []
+
+        # Phase 1 - Archival and Templates
+        assert session.archive_id is None
+        assert session.template_id is None
 
     def test_valid_status_transition(self):
         """Test valid status transition."""
@@ -421,3 +450,135 @@ class TestSessionEntity:
         session.working_directory_path = workdir_path
 
         assert session.working_directory_path == workdir_path
+
+    # Phase 1 - New test methods for advanced metrics
+    def test_increment_hook_execution_count(self):
+        """Test incrementing hook execution count."""
+        session = Session(
+            id=uuid4(),
+            user_id=uuid4(),
+            mode=SessionMode.INTERACTIVE,
+            sdk_options={},
+        )
+
+        assert session.total_hook_executions == 0
+        original_updated_at = session.updated_at
+
+        session.increment_hook_execution_count()
+        assert session.total_hook_executions == 1
+        assert session.updated_at >= original_updated_at
+
+        session.increment_hook_execution_count()
+        assert session.total_hook_executions == 2
+
+    def test_increment_permission_check_count(self):
+        """Test incrementing permission check count."""
+        session = Session(
+            id=uuid4(),
+            user_id=uuid4(),
+            mode=SessionMode.INTERACTIVE,
+            sdk_options={},
+        )
+
+        assert session.total_permission_checks == 0
+        original_updated_at = session.updated_at
+
+        session.increment_permission_check_count()
+        assert session.total_permission_checks == 1
+        assert session.updated_at >= original_updated_at
+
+        session.increment_permission_check_count()
+        assert session.total_permission_checks == 2
+
+    def test_increment_error_count(self):
+        """Test incrementing error count."""
+        session = Session(
+            id=uuid4(),
+            user_id=uuid4(),
+            mode=SessionMode.INTERACTIVE,
+            sdk_options={},
+        )
+
+        assert session.total_errors == 0
+        original_updated_at = session.updated_at
+
+        session.increment_error_count()
+        assert session.total_errors == 1
+        assert session.updated_at >= original_updated_at
+
+        session.increment_error_count()
+        assert session.total_errors == 2
+
+    def test_increment_retry_count(self):
+        """Test incrementing retry count."""
+        session = Session(
+            id=uuid4(),
+            user_id=uuid4(),
+            mode=SessionMode.INTERACTIVE,
+            sdk_options={},
+        )
+
+        assert session.total_retries == 0
+        original_updated_at = session.updated_at
+
+        session.increment_retry_count()
+        assert session.total_retries == 1
+        assert session.updated_at >= original_updated_at
+
+        session.increment_retry_count()
+        assert session.total_retries == 2
+
+    def test_forked_session_mode(self):
+        """Test forked session mode from Phase 1."""
+        session = Session(
+            id=uuid4(),
+            user_id=uuid4(),
+            mode=SessionMode.FORKED,
+            sdk_options={},
+        )
+
+        assert session.mode == SessionMode.FORKED
+
+    def test_phase1_advanced_configuration(self):
+        """Test Phase 1 advanced configuration can be set."""
+        session = Session(
+            id=uuid4(),
+            user_id=uuid4(),
+            mode=SessionMode.INTERACTIVE,
+            sdk_options={},
+        )
+
+        # Test setting Phase 1 configuration
+        session.include_partial_messages = True
+        session.max_retries = 5
+        session.retry_delay = 3.0
+        session.timeout_seconds = 180
+        session.hooks_enabled = ["pre_tool_use", "post_tool_use"]
+        session.permission_mode = "strict"
+        session.custom_policies = ["policy1", "policy2"]
+
+        assert session.include_partial_messages is True
+        assert session.max_retries == 5
+        assert session.retry_delay == 3.0
+        assert session.timeout_seconds == 180
+        assert session.hooks_enabled == ["pre_tool_use", "post_tool_use"]
+        assert session.permission_mode == "strict"
+        assert session.custom_policies == ["policy1", "policy2"]
+
+    def test_archive_and_template_ids(self):
+        """Test setting archive and template IDs from Phase 1."""
+        session = Session(
+            id=uuid4(),
+            user_id=uuid4(),
+            mode=SessionMode.INTERACTIVE,
+            sdk_options={},
+        )
+
+        archive_id = uuid4()
+        template_id = uuid4()
+
+        session.archive_id = archive_id
+        session.template_id = template_id
+
+        assert session.archive_id == archive_id
+        assert session.template_id == template_id
