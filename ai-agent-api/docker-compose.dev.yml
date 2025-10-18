@@ -1,0 +1,44 @@
+services:
+  # PostgreSQL Database (Development)
+  postgres:
+    image: postgres:15-alpine
+    container_name: aiagent-postgres-dev
+    environment:
+      POSTGRES_USER: aiagent
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: aiagent_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiagent-dev-network
+
+  # Redis (Development)
+  redis:
+    image: redis:7-alpine
+    container_name: aiagent-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiagent-dev-network
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+
+networks:
+  aiagent-dev-network:
+    driver: bridge

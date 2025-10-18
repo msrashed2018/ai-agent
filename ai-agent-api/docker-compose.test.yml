@@ -1,0 +1,44 @@
+services:
+  # PostgreSQL Database (Testing)
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: aiagent-postgres-test
+    environment:
+      POSTGRES_USER: aiagent_test
+      POSTGRES_PASSWORD: password_test
+      POSTGRES_DB: aiagent_test_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiagent_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiagent-test-network
+
+  # Redis (Testing)
+  redis-test:
+    image: redis:7-alpine
+    container_name: aiagent-redis-test
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiagent-test-network
+
+volumes:
+  postgres_test_data:
+  redis_test_data:
+
+networks:
+  aiagent-test-network:
+    driver: bridge

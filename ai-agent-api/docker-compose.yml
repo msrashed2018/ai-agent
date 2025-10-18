@@ -1,0 +1,148 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (Development)
+  postgres:
+    image: postgres:15-alpine
+    container_name: aiagent-postgres
+    environment:
+      POSTGRES_USER: aiagent
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: aiagent_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiagent-network
+
+  # PostgreSQL Database (Testing)
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: aiagent-postgres-test
+    environment:
+      POSTGRES_USER: aiagent_test
+      POSTGRES_PASSWORD: password_test
+      POSTGRES_DB: aiagent_test_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiagent_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiagent-network
+    profiles:
+      - test
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: aiagent-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiagent-network
+
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aiagent-api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aiagent:password@postgres:5432/aiagent_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SECRET_KEY: ${SECRET_KEY:-your_secret_key_here_minimum_32_characters_long}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-true}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aiagent-network
+    restart: unless-stopped
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aiagent-celery-worker
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aiagent:password@postgres:5432/aiagent_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SECRET_KEY: ${SECRET_KEY:-your_secret_key_here_minimum_32_characters_long}
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+    depends_on:
+      - postgres
+      - redis
+      - api
+    networks:
+      - aiagent-network
+    restart: unless-stopped
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aiagent-celery-beat
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aiagent:password@postgres:5432/aiagent_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SECRET_KEY: ${SECRET_KEY:-your_secret_key_here_minimum_32_characters_long}
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+    depends_on:
+      - postgres
+      - redis
+      - api
+    networks:
+      - aiagent-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  postgres_test_data:
+  redis_data:
+
+networks:
+  aiagent-network:
+    driver: bridge
