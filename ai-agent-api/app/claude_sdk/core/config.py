@@ -39,6 +39,29 @@ class ClientConfig:
     hooks: Optional[Dict[str, List[Any]]] = None  # HookMatcher
     can_use_tool: Optional[Callable] = None
 
+    def __post_init__(self) -> None:
+        """Validate client configuration."""
+        if self.max_turns <= 0:
+            raise ValueError("max_turns must be positive")
+        if self.max_retries < 0:
+            raise ValueError("max_retries cannot be negative")
+        if self.retry_delay <= 0:
+            raise ValueError("retry_delay must be positive")
+        if self.timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        if not self.model.strip():
+            raise ValueError("model cannot be empty")
+        if not self.permission_mode.strip():
+            raise ValueError("permission_mode cannot be empty")
+
+    def is_streaming_enabled(self) -> bool:
+        """Check if partial message streaming is enabled."""
+        return self.include_partial_messages
+
+    def get_retry_backoff(self, attempt: int) -> float:
+        """Calculate retry delay with exponential backoff."""
+        return self.retry_delay * (2 ** attempt)
+
 
 @dataclass
 class ClientMetrics:
@@ -123,3 +146,22 @@ class ClientMetrics:
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
+
+    def get_duration_seconds(self) -> Optional[float]:
+        """Get session duration in seconds."""
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
+
+    def is_completed(self) -> bool:
+        """Check if session metrics are completed."""
+        return self.completed_at is not None
+
+    def get_total_tokens(self) -> int:
+        """Get total token count across all types."""
+        return (
+            self.total_input_tokens +
+            self.total_output_tokens +
+            self.total_cache_creation_tokens +
+            self.total_cache_read_tokens
+        )
