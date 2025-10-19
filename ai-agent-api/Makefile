@@ -114,10 +114,10 @@ seed-db: ## Seed the database with default admin user and test data
 run: ## Run the application locally (foreground)
 	poetry run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-run-bg: ## Run the application in background with logging
+run-bg: ## Run the application in background with logging and hot reload
 	@mkdir -p logs
 	@echo "Starting API service in background..."
-	nohup poetry run uvicorn main:app --host 0.0.0.0 --port 8000 > logs/api.log 2>&1 & echo $$! > .api.pid
+	nohup poetry run uvicorn main:app --reload --host 0.0.0.0 --port 8000 > logs/api.log 2>&1 & echo $$! > .api.pid
 	@echo "API service started. PID: $$(cat .api.pid)"
 	@echo "Logs: tail -f logs/api.log"
 

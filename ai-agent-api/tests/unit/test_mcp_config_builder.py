@@ -14,8 +14,11 @@ class TestMCPConfigBuilder:
 
     @pytest.fixture
     def mcp_config_builder(self):
-        """Create MCPConfigBuilder with mocked repository."""
+        """Create MCPConfigBuilder with mocked repository (async methods)."""
         mock_repo = AsyncMock()
+        # Patch async methods to be awaitable and return [] by default
+        mock_repo.list_by_user = AsyncMock(return_value=[])
+        mock_repo.list_enabled = AsyncMock(return_value=[])
         return MCPConfigBuilder(mock_repo)
 
     @pytest.fixture
@@ -27,7 +30,7 @@ class TestMCPConfigBuilder:
                 user_id=uuid4(),
                 name="user_filesystem",
                 description="User filesystem server",
-                config_type="stdio",
+                server_type="stdio",
                 config={
                     "command": "npx",
                     "args": ["@modelcontextprotocol/server-filesystem", "/path/to/files"],
@@ -40,7 +43,7 @@ class TestMCPConfigBuilder:
                 user_id=uuid4(),
                 name="user_github",
                 description="User GitHub server",
-                config_type="stdio",
+                server_type="stdio",
                 config={
                     "command": "npx",
                     "args": ["@modelcontextprotocol/server-github"],
@@ -60,7 +63,7 @@ class TestMCPConfigBuilder:
                 user_id=None,
                 name="global_brave_search",
                 description="Global Brave Search server",
-                config_type="stdio",
+                server_type="stdio",
                 config={
                     "command": "npx",
                     "args": ["@modelcontextprotocol/server-brave-search"],
@@ -81,26 +84,20 @@ class TestMCPConfigBuilder:
         """Test building user MCP config with user and global servers."""
         # Arrange
         user_id = uuid4()
-        
-        mcp_config_builder.mcp_server_repo.get_by_user.return_value = sample_user_servers
-        mcp_config_builder.mcp_server_repo.get_global_enabled.return_value = sample_global_servers
-        
+        mcp_config_builder.mcp_server_repo.list_by_user = AsyncMock(return_value=sample_user_servers)
+        mcp_config_builder.mcp_server_repo.list_enabled = AsyncMock(return_value=sample_global_servers)
         # Act
         config = await mcp_config_builder.build_user_mcp_config(user_id)
-        
         # Assert
         assert "user_filesystem" in config
         assert "user_github" in config
         assert "global_brave_search" in config
-        
-        # Verify filesystem server config
         filesystem_config = config["user_filesystem"]
         assert filesystem_config["command"] == "npx"
         assert "@modelcontextprotocol/server-filesystem" in filesystem_config["args"]
-        
         # Verify repository calls
-        mcp_config_builder.mcp_server_repo.get_by_user.assert_called_once_with(user_id)
-        mcp_config_builder.mcp_server_repo.get_global_enabled.assert_called_once()
+        mcp_config_builder.mcp_server_repo.list_by_user.assert_awaited_once_with(str(user_id))
+        mcp_config_builder.mcp_server_repo.list_enabled.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_build_user_mcp_config_empty(
@@ -110,13 +107,10 @@ class TestMCPConfigBuilder:
         """Test building user MCP config with no servers."""
         # Arrange
         user_id = uuid4()
-        
-        mcp_config_builder.mcp_server_repo.get_by_user.return_value = []
-        mcp_config_builder.mcp_server_repo.get_global_enabled.return_value = []
-        
+        mcp_config_builder.mcp_server_repo.list_by_user = AsyncMock(return_value=[])
+        mcp_config_builder.mcp_server_repo.list_enabled = AsyncMock(return_value=[])
         # Act
         config = await mcp_config_builder.build_user_mcp_config(user_id)
-        
         # Assert
         assert config == {}
 
@@ -129,26 +123,21 @@ class TestMCPConfigBuilder:
         """Test building session MCP config including SDK tools."""
         # Arrange
         user_id = uuid4()
-        
-        mcp_config_builder.mcp_server_repo.get_by_user.return_value = sample_user_servers
-        mcp_config_builder.mcp_server_repo.get_global_enabled.return_value = []
-        
+        mcp_config_builder.mcp_server_repo.list_by_user = AsyncMock(return_value=sample_user_servers)
+        mcp_config_builder.mcp_server_repo.list_enabled = AsyncMock(return_value=[])
         # Act
         config = await mcp_config_builder.build_session_mcp_config(
             user_id=user_id,
             include_sdk_tools=True,
         )
-        
         # Assert
         # Should include SDK tools
         assert "kubernetes_readonly" in config
         assert "database" in config
         assert "monitoring" in config
-        
         # Should include user servers
         assert "user_filesystem" in config
         assert "user_github" in config
-        
         # Verify SDK tool config structure
         k8s_config = config["kubernetes_readonly"]
         assert "tools" in k8s_config
@@ -163,22 +152,18 @@ class TestMCPConfigBuilder:
         """Test building session MCP config without SDK tools."""
         # Arrange
         user_id = uuid4()
-        
-        mcp_config_builder.mcp_server_repo.get_by_user.return_value = sample_user_servers
-        mcp_config_builder.mcp_server_repo.get_global_enabled.return_value = []
-        
+        mcp_config_builder.mcp_server_repo.list_by_user = AsyncMock(return_value=sample_user_servers)
+        mcp_config_builder.mcp_server_repo.list_enabled = AsyncMock(return_value=[])
         # Act
         config = await mcp_config_builder.build_session_mcp_config(
             user_id=user_id,
             include_sdk_tools=False,
         )
-        
         # Assert
         # Should NOT include SDK tools
         assert "kubernetes_readonly" not in config
         assert "database" not in config
         assert "monitoring" not in config
-        
         # Should include user servers
         assert "user_filesystem" in config
         assert "user_github" in config
@@ -190,7 +175,7 @@ class TestMCPConfigBuilder:
             id=uuid4(),
             user_id=uuid4(),
             name="test_stdio",
-            config_type="stdio",
+            server_type="stdio",
             config={
                 "command": "python",
                 "args": ["-m", "test.server"],
@@ -198,10 +183,8 @@ class TestMCPConfigBuilder:
             },
             is_enabled=True,
         )
-        
         # Act
         sdk_config = mcp_config_builder._convert_to_sdk_format(server)
-        
         # Assert
         assert sdk_config["command"] == "python"
         assert sdk_config["args"] == ["-m", "test.server"]
@@ -214,17 +197,15 @@ class TestMCPConfigBuilder:
             id=uuid4(),
             user_id=uuid4(),
             name="test_sse",
-            config_type="sse",
+            server_type="sse",
             config={
                 "url": "http://localhost:3000/sse",
                 "headers": {"Authorization": "Bearer token"},
             },
             is_enabled=True,
         )
-        
         # Act
         sdk_config = mcp_config_builder._convert_to_sdk_format(server)
-        
         # Assert
         assert sdk_config["type"] == "sse"
         assert sdk_config["url"] == "http://localhost:3000/sse"
@@ -237,17 +218,15 @@ class TestMCPConfigBuilder:
             id=uuid4(),
             user_id=uuid4(),
             name="test_http",
-            config_type="http",
+            server_type="http",
             config={
                 "url": "https://api.example.com/mcp",
                 "headers": {"X-API-Key": "secret"},
             },
             is_enabled=True,
         )
-        
         # Act
         sdk_config = mcp_config_builder._convert_to_sdk_format(server)
-        
         # Assert
         assert sdk_config["type"] == "http"
         assert sdk_config["url"] == "https://api.example.com/mcp"
@@ -261,37 +240,29 @@ class TestMCPConfigBuilder:
         """Test that disabled servers are filtered out."""
         # Arrange
         user_id = uuid4()
-        
         enabled_server = MCPServerModel(
             id=uuid4(),
             user_id=user_id,
             name="enabled_server",
-            config_type="stdio",
+            server_type="stdio",
             config={"command": "test"},
             is_enabled=True,
         )
-        
         disabled_server = MCPServerModel(
             id=uuid4(),
             user_id=user_id,
             name="disabled_server",
-            config_type="stdio",
+            server_type="stdio",
             config={"command": "test"},
             is_enabled=False,
         )
-        
-        mcp_config_builder.mcp_server_repo.get_by_user.return_value = [
-            enabled_server,
-            disabled_server,
-        ]
-        mcp_config_builder.mcp_server_repo.get_global_enabled.return_value = []
-        
+        mcp_config_builder.mcp_server_repo.list_by_user = AsyncMock(return_value=[enabled_server, disabled_server])
+        mcp_config_builder.mcp_server_repo.list_enabled = AsyncMock(return_value=[])
         # Act
         config = await mcp_config_builder.build_session_mcp_config(
             user_id=user_id,
             include_sdk_tools=False,
         )
-        
         # Assert
         assert "enabled_server" in config
         assert "disabled_server" not in config

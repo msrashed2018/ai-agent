@@ -95,15 +95,23 @@ from app.domain.entities.user import User
 from app.domain.entities.session import Session, SessionMode, SessionStatus
 from app.domain.value_objects.sdk_options import SDKOptions
 
-# Try to import database models - these might not always be available
+# Import ALL database models to ensure SQLAlchemy relationships are registered
 try:
+    # Import from models package to trigger all model registrations
+    from app import models
     from app.models.user import UserModel, OrganizationModel
     from app.models.session import SessionModel
+    from app.models.session_template import SessionTemplateModel
+    from app.models.hook_execution import HookExecutionModel
+    from app.models.permission_decision import PermissionDecisionModel
 except ImportError:
     # Models might not be available in all test contexts
     UserModel = None
     OrganizationModel = None
     SessionModel = None
+    SessionTemplateModel = None
+    HookExecutionModel = None
+    PermissionDecisionModel = None
 
 
 # Test Database Configuration
