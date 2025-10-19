@@ -2,7 +2,7 @@
 Authentication API endpoints.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import (
@@ -35,7 +35,7 @@ def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None)
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.jwt_access_token_expire_minutes)
     
-    expire = datetime.utcnow() + expires_delta
+    expire = datetime.now(timezone.utc) + expires_delta
     to_encode = {
         "sub": user_id,
         "exp": expire,
@@ -52,7 +52,7 @@ def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None)
 
 def create_refresh_token(user_id: str) -> str:
     """Create JWT refresh token."""
-    expire = datetime.utcnow() + timedelta(days=settings.jwt_refresh_token_expire_days)
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_token_expire_days)
     to_encode = {
         "sub": user_id,
         "exp": expire,
