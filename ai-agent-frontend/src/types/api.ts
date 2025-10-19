@@ -38,13 +38,39 @@ export interface UserResponse {
 // ============================================================================
 
 export interface SessionCreateRequest {
+  // Existing fields
+  template_id?: string | null;
   name?: string | null;
   description?: string | null;
   model?: string;
+  working_directory?: string | null;
   allowed_tools?: string[];
   system_prompt?: string | null;
+  sdk_options?: Record<string, any> | null;
+  metadata?: Record<string, any> | null;
   mcp_servers?: string[];
+
+  // Phase 4: Session mode
+  mode?: 'interactive' | 'background' | 'forked';
+
+  // Phase 4: Parent session (for forking)
   parent_session_id?: string | null;
+  fork_at_message?: number | null;
+
+  // Phase 4: Streaming configuration
+  include_partial_messages?: boolean;
+
+  // Phase 4: Retry configuration
+  max_retries?: number;
+  retry_delay?: number;
+  timeout_seconds?: number;
+
+  // Phase 4: Hooks configuration
+  hooks_enabled?: string[];
+
+  // Phase 4: Permission configuration
+  permission_mode?: 'default' | 'acceptEdits' | 'bypassPermissions';
+  custom_policies?: string[];
 }
 
 export interface SessionResponse {
@@ -65,6 +91,28 @@ export interface SessionResponse {
   updated_at: string;
   completed_at?: string | null;
   _links?: Links;
+
+  // Phase 4: Additional fields
+  mode?: string;
+  is_fork: boolean;
+  fork_at_message?: number | null;
+  include_partial_messages?: boolean;
+  max_retries?: number;
+  retry_delay?: number;
+  timeout_seconds?: number;
+  hooks_enabled?: string[];
+  permission_mode?: string;
+  custom_policies?: string[];
+  total_hook_executions?: number;
+  total_permission_checks?: number;
+  total_errors?: number;
+  total_retries?: number;
+  archive_id?: string | null;
+  template_id?: string | null;
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+  total_cache_creation_tokens?: number;
+  total_cache_read_tokens?: number;
 }
 
 export interface SessionListResponse {
@@ -272,6 +320,114 @@ export interface ReportListResponse {
 }
 
 // ============================================================================
+// Phase 4: Advanced Session Features
+// ============================================================================
+
+export interface SessionForkRequest {
+  name?: string | null;
+  fork_at_message?: number | null;
+  include_working_directory?: boolean;
+}
+
+export interface SessionArchiveRequest {
+  upload_to_s3?: boolean;
+  compression?: string;
+}
+
+export interface HookExecutionResponse {
+  id: string;
+  session_id: string;
+  hook_type: string;
+  hook_name: string;
+  tool_use_id?: string | null;
+  input_data: Record<string, any>;
+  output_data: Record<string, any>;
+  continue_execution: boolean;
+  executed_at: string;
+  duration_ms?: number | null;
+}
+
+export interface PermissionDecisionResponse {
+  id: string;
+  session_id: string;
+  tool_name: string;
+  input_data: Record<string, any>;
+  context: Record<string, any>;
+  decision: 'allow' | 'deny';
+  reason?: string | null;
+  interrupted: boolean;
+  decided_at: string;
+}
+
+export interface ArchiveMetadataResponse {
+  id: string;
+  session_id: string;
+  archive_path: string;
+  size_bytes: number;
+  compression: string;
+  manifest: Record<string, any>;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  error_message?: string | null;
+  archived_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetricsSnapshotResponse {
+  id: string;
+  session_id: string;
+  total_messages: number;
+  total_tool_calls: number;
+  total_errors: number;
+  total_retries: number;
+  total_cost_usd: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cache_creation_tokens: number;
+  total_cache_read_tokens: number;
+  total_duration_ms: number;
+  created_at: string;
+}
+
+export interface SessionMetricsResponse {
+  session_id: string;
+  current_metrics: MetricsSnapshotResponse;
+  previous_snapshots: MetricsSnapshotResponse[];
+  performance_trends: {
+    messages_per_hour: number;
+    average_cost_per_message: number;
+    error_rate_percent: number;
+    cache_hit_rate_percent: number;
+  };
+}
+
+// ============================================================================
+// Phase 4: Monitoring
+// ============================================================================
+
+export interface HealthCheckResponse {
+  status: 'healthy' | 'unhealthy' | 'degraded';
+  components: Record<string, {
+    status: 'healthy' | 'unhealthy' | 'unknown';
+    message?: string;
+    timestamp: string;
+  }>;
+  timestamp: string;
+}
+
+export interface CostSummaryResponse {
+  user_id: string;
+  period: 'today' | 'week' | 'month';
+  total_cost_usd: number;
+  session_count: number;
+  message_count: number;
+  average_cost_per_session: number;
+  start_date: string;
+  end_date: string;
+  breakdown_by_model: Record<string, number>;
+}
+
+// ============================================================================
 // Admin Types
 // ============================================================================
 
@@ -432,3 +588,8 @@ export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type ReportFormat = 'html' | 'pdf' | 'json' | 'markdown';
 export type MCPServerType = 'stdio' | 'sse' | 'http';
 export type HealthStatus = 'healthy' | 'unhealthy' | 'unknown';
+export type SessionMode = 'interactive' | 'background' | 'forked';
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
+export type ArchiveStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+export type PermissionDecision = 'allow' | 'deny';
+export type HookType = 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Stop' | 'SubagentStop' | 'PreCompact';

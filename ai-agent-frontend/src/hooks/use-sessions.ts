@@ -9,6 +9,12 @@ import type {
   MessageResponse,
   ToolCallResponse,
   PaginationParams,
+  SessionForkRequest,
+  SessionArchiveRequest,
+  HookExecutionResponse,
+  PermissionDecisionResponse,
+  MetricsSnapshotResponse,
+  SessionMetricsResponse,
 } from '@/types/api';
 import { toast } from 'sonner';
 
@@ -155,5 +161,73 @@ export function useDownloadWorkdir() {
       const message = error.response?.data?.detail || 'Failed to download working directory';
       toast.error(message);
     },
+  });
+}
+
+// ============================================================================
+// Phase 4: Advanced Session Features
+// ============================================================================
+
+export function useSessionFork() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sessionId, data }: { sessionId: string; data: SessionForkRequest }) =>
+      apiClient.forkSession(sessionId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      toast.success('Session forked successfully');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to fork session';
+      toast.error(message);
+    },
+  });
+}
+
+export function useSessionArchive() {
+  return useMutation({
+    mutationFn: ({ sessionId, data }: { sessionId: string; data: SessionArchiveRequest }) =>
+      apiClient.archiveSession(sessionId, data),
+    onSuccess: () => {
+      toast.success('Session archived successfully');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to archive session';
+      toast.error(message);
+    },
+  });
+}
+
+export function useSessionHooks(sessionId: string, limit: number = 50) {
+  return useQuery<HookExecutionResponse[]>({
+    queryKey: ['session-hooks', sessionId, limit],
+    queryFn: () => apiClient.getSessionHooks(sessionId, limit),
+    enabled: !!sessionId,
+  });
+}
+
+export function useSessionPermissions(sessionId: string, limit: number = 50) {
+  return useQuery<PermissionDecisionResponse[]>({
+    queryKey: ['session-permissions', sessionId, limit],
+    queryFn: () => apiClient.getSessionPermissions(sessionId, limit),
+    enabled: !!sessionId,
+  });
+}
+
+export function useSessionMetrics(sessionId: string) {
+  return useQuery<SessionMetricsResponse>({
+    queryKey: ['session-metrics', sessionId],
+    queryFn: () => apiClient.getCurrentSessionMetrics(sessionId),
+    enabled: !!sessionId,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+}
+
+export function useSessionMetricsSnapshots(sessionId: string, limit: number = 50) {
+  return useQuery<MetricsSnapshotResponse[]>({
+    queryKey: ['session-metrics-snapshots', sessionId, limit],
+    queryFn: () => apiClient.getSessionMetricsSnapshots(sessionId, limit),
+    enabled: !!sessionId,
   });
 }
