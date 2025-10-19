@@ -47,7 +47,7 @@ class TaskUpdateRequest(BaseModel):
 
 
 class TaskResponse(BaseModel):
-    """Task response."""
+    """Task response - matches Task entity fields only."""
     
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
     
@@ -57,22 +57,22 @@ class TaskResponse(BaseModel):
     description: Optional[str] = Field(None, description="Task description")
     prompt_template: str = Field(..., description="Prompt template")
     allowed_tools: List[str] = Field(default_factory=list, description="Allowed tool patterns")
+    disallowed_tools: List[str] = Field(default_factory=list, description="Disallowed tool patterns")
     sdk_options: Dict[str, Any] = Field(default_factory=dict, description="SDK options")
-    is_scheduled: bool = Field(..., description="Whether task is scheduled")
+    working_directory_path: Optional[str] = Field(None, description="Working directory path")
+    is_scheduled: bool = Field(default=False, description="Whether task is scheduled")
     schedule_cron: Optional[str] = Field(None, description="Cron expression")
-    schedule_enabled: bool = Field(..., description="Whether schedule is enabled")
-    last_executed_at: Optional[datetime] = Field(None, description="Last execution timestamp")
-    next_scheduled_at: Optional[datetime] = Field(None, description="Next scheduled execution")
-    execution_count: int = Field(..., description="Total execution count")
-    success_count: int = Field(..., description="Successful execution count")
-    failure_count: int = Field(..., description="Failed execution count")
-    generate_report: bool = Field(..., description="Generate report after execution")
-    report_format: str = Field(..., description="Report format")
-    notification_config: Dict[str, Any] = Field(default_factory=dict, description="Notification config")
+    schedule_enabled: bool = Field(default=False, description="Whether schedule is enabled")
+    generate_report: bool = Field(default=False, description="Generate report after execution")
+    report_format: Optional[str] = Field(None, description="Report format")
+    notification_config: Optional[Dict[str, Any]] = Field(None, description="Notification config")
     tags: List[str] = Field(default_factory=list, description="Task tags")
+    is_public: bool = Field(default=False, description="Is publicly available")
+    is_active: bool = Field(default=True, description="Whether task is active")
+    is_deleted: bool = Field(default=False, description="Soft delete flag")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Custom metadata")
+    deleted_at: Optional[datetime] = Field(None, description="Deletion timestamp")
     links: Links = Field(default_factory=Links, alias="_links", description="HATEOAS links")
 
 

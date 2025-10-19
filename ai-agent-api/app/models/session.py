@@ -91,7 +91,7 @@ class SessionModel(Base):
     # Phase 1 - New Relationships
     hook_executions = relationship("HookExecutionModel", back_populates="session", cascade="all, delete-orphan")
     permission_decisions = relationship("PermissionDecisionModel", back_populates="session", cascade="all, delete-orphan")
-    archive = relationship("WorkingDirectoryArchiveModel", foreign_keys=[archive_id], back_populates="session", uselist=False)
+    archive = relationship("WorkingDirectoryArchiveModel", back_populates="session", foreign_keys="WorkingDirectoryArchiveModel.session_id", uselist=False)
     template = relationship("SessionTemplateModel", foreign_keys=[template_id], back_populates="sessions")
     metrics_snapshots = relationship("SessionMetricsSnapshotModel", back_populates="session", cascade="all, delete-orphan")
     

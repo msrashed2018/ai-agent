@@ -16,7 +16,7 @@ def setup_logging(
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         format: Log format ('json' or 'text')
-        log_file: Optional log file path. If None, logs to stdout only.
+        log_file: Optional log file path. If None, logs to stdout only..
     """
     # Create logs directory if logging to file
     if log_file:

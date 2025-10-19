@@ -40,7 +40,7 @@ class WorkingDirectoryArchiveModel(Base):
     completed_at = Column(DateTime(timezone=True))
 
     # Relationships
-    session = relationship("SessionModel", foreign_keys=[session_id], back_populates="archive")
+    session = relationship("SessionModel", back_populates="archive", foreign_keys=[session_id])
 
     # Constraints and Indexes
     __table_args__ = (

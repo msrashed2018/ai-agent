@@ -207,7 +207,8 @@ class HookManager:
 
             if hooks:
                 # Create wrapper function that calls execute_hooks
-                async def create_hook_callback(ht: HookType):
+                # Use closure to capture hook_type value correctly
+                def create_hook_callback(ht: HookType):
                     async def hook_callback(
                         input_data: Dict[str, Any],
                         tool_use_id: str,
@@ -223,7 +224,7 @@ class HookManager:
                     return hook_callback
 
                 # Build the callback for this hook type
-                callback = await create_hook_callback(hook_type)
+                callback = create_hook_callback(hook_type)
 
                 # Create HookMatcher
                 matcher = HookMatcher(hooks=[callback])

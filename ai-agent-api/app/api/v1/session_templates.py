@@ -95,7 +95,7 @@ async def create_template(
 
         # Build response with HATEOAS links
         response = SessionTemplateResponse.model_validate(template)
-        response._links = Links(
+        response.links = Links(
             self=f"/api/v1/session-templates/{template.id}",
         )
 
@@ -136,7 +136,7 @@ async def get_template(
 
         # Build response with HATEOAS links
         response = SessionTemplateResponse.model_validate(template)
-        response._links = Links(
+        response.links = Links(
             self=f"/api/v1/session-templates/{template.id}",
             update=f"/api/v1/session-templates/{template.id}",
             delete=f"/api/v1/session-templates/{template.id}",
@@ -214,7 +214,7 @@ async def list_templates(
         items = []
         for template in templates:
             response = SessionTemplateResponse.model_validate(template)
-            response._links = Links(
+            response.links = Links(
                 self=f"/api/v1/session-templates/{template.id}",
             )
             items.append(response)
@@ -273,7 +273,7 @@ async def search_templates(
         items = []
         for template in templates:
             response = SessionTemplateResponse.model_validate(template)
-            response._links = Links(
+            response.links = Links(
                 self=f"/api/v1/session-templates/{template.id}",
             )
             items.append(response)
@@ -321,7 +321,7 @@ async def get_most_used_templates(
     items = []
     for template in templates:
         response = SessionTemplateResponse.model_validate(template)
-        response._links = Links(
+        response.links = Links(
             self=f"/api/v1/session-templates/{template.id}",
             create_session=f"/api/v1/sessions?template_id={template.id}",
         )
@@ -372,7 +372,7 @@ async def update_template(
 
         # Build response
         response = SessionTemplateResponse.model_validate(template)
-        response._links = Links(
+        response.links = Links(
             self=f"/api/v1/session-templates/{template.id}",
         )
 
@@ -423,7 +423,7 @@ async def update_sharing_settings(
 
         # Build response
         response = SessionTemplateResponse.model_validate(template)
-        response._links = Links(
+        response.links = Links(
             self=f"/api/v1/session-templates/{template.id}",
         )
 

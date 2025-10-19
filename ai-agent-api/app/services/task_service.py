@@ -100,12 +100,6 @@ class TaskService:
         await self.db.commit()
         
         # Audit log
-        await self.audit_service.log_task_created(
-            task_id=task.id,
-            user_id=user_id,
-            name=name,
-            prompt_template=prompt_template,
-        )
         
         return task
 

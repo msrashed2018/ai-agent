@@ -45,7 +45,14 @@ async def create_task(
     
     Tasks can be executed manually or scheduled to run automatically.
     """
-    service = TaskService(db)
+    from app.repositories.user_repository import UserRepository
+    from app.services.audit_service import AuditService
+    
+    task_repo = TaskRepository(db)
+    task_execution_repo = TaskExecutionRepository(db)
+    user_repo = UserRepository(db)
+    audit_service = AuditService(db)
+    service = TaskService(db, task_repo, task_execution_repo, user_repo, audit_service)
     
     # Create task
     task = await service.create_task(
@@ -57,12 +64,9 @@ async def create_task(
         sdk_options=request.sdk_options,
         is_scheduled=request.is_scheduled,
         schedule_cron=request.schedule_cron,
-        schedule_enabled=request.schedule_enabled,
         generate_report=request.generate_report,
         report_format=request.report_format,
-        notification_config=request.notification_config,
         tags=request.tags,
-        metadata=request.metadata,
     )
     
     # Build HATEOAS links
@@ -169,7 +173,14 @@ async def update_task(
     """
     Update task configuration.
     """
-    service = TaskService(db)
+    from app.repositories.user_repository import UserRepository
+    from app.services.audit_service import AuditService
+    
+    task_repo = TaskRepository(db)
+    task_execution_repo = TaskExecutionRepository(db)
+    user_repo = UserRepository(db)
+    audit_service = AuditService(db)
+    service = TaskService(db, task_repo, task_execution_repo, user_repo, audit_service)
     
     # Get task
     repo = TaskRepository(db)
@@ -190,7 +201,8 @@ async def update_task(
     
     # Update task
     task = await service.update_task(
-        task_id=str(task_id),
+        task_id=task_id,
+        user_id=current_user.id,
         **request.model_dump(exclude_unset=True),
     )
     
@@ -213,7 +225,14 @@ async def delete_task(
     """
     Delete a task.
     """
-    service = TaskService(db)
+    from app.repositories.user_repository import UserRepository
+    from app.services.audit_service import AuditService
+    
+    task_repo = TaskRepository(db)
+    task_execution_repo = TaskExecutionRepository(db)
+    user_repo = UserRepository(db)
+    audit_service = AuditService(db)
+    service = TaskService(db, task_repo, task_execution_repo, user_repo, audit_service)
     
     # Get task
     repo = TaskRepository(db)
@@ -248,7 +267,14 @@ async def execute_task(
     
     Starts task execution asynchronously. Use the execution ID to check status.
     """
-    service = TaskService(db)
+    from app.repositories.user_repository import UserRepository
+    from app.services.audit_service import AuditService
+    
+    task_repo = TaskRepository(db)
+    task_execution_repo = TaskExecutionRepository(db)
+    user_repo = UserRepository(db)
+    audit_service = AuditService(db)
+    service = TaskService(db, task_repo, task_execution_repo, user_repo, audit_service)
     
     # Get task
     repo = TaskRepository(db)

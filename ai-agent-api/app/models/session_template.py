@@ -51,6 +51,7 @@ class SessionTemplateModel(Base):
 
     # Relationships
     user = relationship("UserModel", back_populates="session_templates")
+    sessions = relationship("SessionModel", back_populates="template", foreign_keys="SessionModel.template_id")
 
     # Constraints
     __table_args__ = (
