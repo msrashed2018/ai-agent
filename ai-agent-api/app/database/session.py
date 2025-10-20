@@ -6,7 +6,7 @@ from app.core.config import settings
 
 # Create async engine with conditional pool configuration
 engine_kwargs = {
-    "echo": settings.debug,
+    "echo": False,  # Disable SQLAlchemy echo to respect logging configuration
     "pool_pre_ping": True,
 }
 

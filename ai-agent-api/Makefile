@@ -180,10 +180,10 @@ status: ## Show status of background services
 logs: ## Tail all logs
 	tail -f logs/*.log
 
-login-admin: ## Login as admin and export tokens (use with: eval $(make login-admin))
+login-admin: ## Login as admin and save tokens to .env.tokens
 	@python3 scripts/auth_helper.py --user admin
 
-login-user: ## Login as regular user and export tokens (use with: eval $(make login-user))
+login-user: ## Login as regular user and save tokens to .env.tokens
 	@python3 scripts/auth_helper.py --user user
 
 setup: install migrate seed-db ## Complete development setup
