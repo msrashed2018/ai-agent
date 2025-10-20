@@ -113,7 +113,25 @@ class TaskService:
         await self.db.flush()
         await self.db.commit()
         
+        logger.info(
+            "Task created successfully",
+            extra={
+                "user_id": str(user_id),
+                "task_id": str(task.id),
+                "task_name": name,
+                "is_scheduled": is_scheduled,
+                "generate_report": generate_report
+            }
+        )
+        
         # Audit log
+        await self.audit_service.log_action(
+            user_id=user_id,
+            action_type="task.created",
+            resource_type="task",
+            resource_id=task.id,
+            action_details={"name": name, "is_scheduled": is_scheduled}
+        )
         
         return task
 
@@ -138,7 +156,7 @@ class TaskService:
             PermissionDeniedError: User doesn't have access
             ValidationError: Task not ready for execution
         """
-        from app.domain.entities.task_execution import TaskExecution, TaskExecutionStatus
+        from app.domain.entities.task_execution import TaskExecution, TaskExecutionStatus, TriggerType
         from app.services.sdk_session_service import SDKIntegratedSessionService
         from app.services.storage_manager import StorageManager
         from app.repositories.session_repository import SessionRepository
@@ -146,9 +164,22 @@ class TaskService:
         from app.repositories.tool_call_repository import ToolCallRepository
         from uuid import uuid4
         
+        logger.info(
+            "Starting task execution",
+            extra={
+                "task_id": task_id,
+                "trigger_type": trigger_type,
+                "variables_provided": bool(variables)
+            }
+        )
+        
         # 1. Get and validate task
         task = await self.task_repo.get_by_id(task_id)
         if not task:
+            logger.warning(
+                "Task execution failed - task not found",
+                extra={"task_id": task_id}
+            )
             raise TaskNotFoundError(f"Task {task_id} not found")
         
         if not task.is_active:
@@ -331,8 +362,23 @@ class TaskService:
 
     async def get_task(self, task_id: UUID, user_id: UUID) -> Task:
         """Get task by ID with authorization check."""
+        logger.debug(
+            "Getting task by ID",
+            extra={
+                "task_id": str(task_id),
+                "user_id": str(user_id)
+            }
+        )
+        
         task_model = await self.task_repo.get_by_id(task_id)
         if not task_model:
+            logger.warning(
+                "Task not found",
+                extra={
+                    "task_id": str(task_id),
+                    "user_id": str(user_id)
+                }
+            )
             raise TaskNotFoundError(f"Task {task_id} not found")
         
         # Check authorization
@@ -400,14 +446,40 @@ class TaskService:
 
     async def delete_task(self, task_id: UUID, user_id: UUID) -> bool:
         """Soft delete a task."""
+        logger.info(
+            "Deleting task",
+            extra={
+                "task_id": str(task_id),
+                "user_id": str(user_id)
+            }
+        )
+        
         task = await self.get_task(task_id, user_id)
         
         # Only owner can delete
         if task.user_id != user_id:
+            logger.warning(
+                "Task deletion denied - not owner",
+                extra={
+                    "task_id": str(task_id),
+                    "user_id": str(user_id),
+                    "task_owner_id": str(task.user_id)
+                }
+            )
             raise PermissionDeniedError("Only task owner can delete")
         
         success = await self.task_repo.soft_delete(task_id)
         await self.db.commit()
+        
+        if success:
+            logger.info(
+                "Task deleted successfully",
+                extra={
+                    "task_id": str(task_id),
+                    "user_id": str(user_id)
+                }
+            )
+        
         return success
 
     async def enable_schedule(self, task_id: UUID, user_id: UUID) -> Task:
