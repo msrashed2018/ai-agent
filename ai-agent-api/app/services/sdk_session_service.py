@@ -4,7 +4,6 @@ Extends SessionService with methods for sending messages through the
 official Claude SDK and processing responses.
 """
 
-import logging
 from typing import AsyncIterator, Optional, Any
 from uuid import UUID
 
@@ -32,8 +31,9 @@ from app.services.storage_manager import StorageManager
 from app.services.audit_service import AuditService
 from app.claude_sdk.execution.executor_factory import ExecutorFactory
 from app.claude_sdk.execution.base_executor import BaseExecutor
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SDKIntegratedSessionService(SessionService):
