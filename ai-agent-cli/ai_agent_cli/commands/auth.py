@@ -59,10 +59,24 @@ def refresh():
 
 
 @auth.command(name="logout")
-def logout():
+@click.option("--all", "logout_all", is_flag=True, help="Logout from all devices")
+def logout(logout_all: bool):
     """Logout and clear stored credentials."""
+    if config_manager.is_authenticated():
+        client = get_client()
+        try:
+            if logout_all:
+                client.logout_all()
+                print_success("Successfully logged out from all devices")
+            else:
+                client.logout()
+                print_success("Successfully logged out")
+        except Exception as e:
+            print_info(f"Warning: API logout failed: {str(e)}")
+            print_info("Clearing local credentials anyway...")
+
     config_manager.clear_tokens()
-    print_success("Successfully logged out")
+    print_success("Local credentials cleared")
 
 
 @auth.command(name="whoami")

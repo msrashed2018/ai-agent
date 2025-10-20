@@ -6,7 +6,7 @@ from ai_agent_cli.core.exceptions import CLIError
 from ai_agent_cli.utils.output import console, print_error
 
 # Import command groups
-from ai_agent_cli.commands import auth, sessions, tasks, reports, mcp, admin, config
+from ai_agent_cli.commands import auth, sessions, tasks, reports, mcp, admin, config, session_templates, monitoring
 
 
 @click.group()
@@ -30,6 +30,8 @@ cli.add_command(reports.reports)
 cli.add_command(mcp.mcp)
 cli.add_command(admin.admin)
 cli.add_command(config.config)
+cli.add_command(session_templates.session_templates)
+cli.add_command(monitoring.monitoring)
 
 
 def main():

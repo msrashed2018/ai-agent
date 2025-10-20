@@ -209,3 +209,109 @@ def download_working_directory(session_id: str, output: str):
 
     except Exception as e:
         raise click.ClickException(f"Failed to download working directory: {str(e)}")
+
+
+@sessions.command(name="fork")
+@click.argument("session_id")
+@click.option("--format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+def fork_session(session_id: str, format: str):
+    """Fork an existing session."""
+    client = get_client()
+
+    try:
+        forked_session = client.fork_session(session_id)
+        print_success(f"Session forked: {forked_session['id']}")
+        format_output(forked_session, format, title="Forked Session")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to fork session: {str(e)}")
+
+
+@sessions.command(name="archive")
+@click.argument("session_id")
+def archive_session(session_id: str):
+    """Archive a session."""
+    client = get_client()
+
+    try:
+        result = client.archive_session(session_id)
+        print_success(f"Session {session_id} archived")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to archive session: {str(e)}")
+
+
+@sessions.command(name="archive-status")
+@click.argument("session_id")
+@click.option("--format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+def get_archive_status(session_id: str, format: str):
+    """Get session archive status."""
+    client = get_client()
+
+    try:
+        status = client.get_session_archive_status(session_id)
+        format_output(status, format, title=f"Archive Status for Session {session_id}")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to get archive status: {str(e)}")
+
+
+@sessions.command(name="hooks")
+@click.argument("session_id")
+@click.option("--format", type=click.Choice(["table", "json"]), default="json", help="Output format")
+def get_hooks(session_id: str, format: str):
+    """Get session hooks configuration."""
+    client = get_client()
+
+    try:
+        hooks = client.get_session_hooks(session_id)
+        format_output(hooks, format, title=f"Hooks for Session {session_id}")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to get session hooks: {str(e)}")
+
+
+@sessions.command(name="permissions")
+@click.argument("session_id")
+@click.option("--format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+def get_permissions(session_id: str, format: str):
+    """Get session permissions."""
+    client = get_client()
+
+    try:
+        permissions = client.get_session_permissions(session_id)
+        format_output(permissions, format, title=f"Permissions for Session {session_id}")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to get session permissions: {str(e)}")
+
+
+@sessions.command(name="metrics")
+@click.argument("session_id")
+@click.option("--format", type=click.Choice(["table", "json"]), default="json", help="Output format")
+def get_metrics(session_id: str, format: str):
+    """Get current session metrics."""
+    client = get_client()
+
+    try:
+        metrics = client.get_session_metrics_current(session_id)
+        format_output(metrics, format, title=f"Current Metrics for Session {session_id}")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to get session metrics: {str(e)}")
+
+
+@sessions.command(name="metrics-history")
+@click.argument("session_id")
+@click.option("--limit", default=50, help="Number of snapshots to return")
+@click.option("--format", type=click.Choice(["table", "json"]), default="json", help="Output format")
+def get_metrics_history(session_id: str, limit: int, format: str):
+    """Get session metrics history (snapshots)."""
+    client = get_client()
+
+    try:
+        snapshots = client.get_session_metrics_snapshots(session_id, {"limit": limit})
+        format_output(snapshots, format, title=f"Metrics History for Session {session_id}")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to get metrics history: {str(e)}")

@@ -93,6 +93,13 @@ class APIClient:
             response = client.patch(url, headers=self._get_headers(), json=data)
             return self._handle_response(response)
 
+    def put(self, endpoint: str, data: Dict[str, Any]) -> Any:
+        """Make PUT request."""
+        url = f"{self.base_url}{endpoint}"
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.put(url, headers=self._get_headers(), json=data)
+            return self._handle_response(response)
+
     def delete(self, endpoint: str) -> Any:
         """Make DELETE request."""
         url = f"{self.base_url}{endpoint}"
@@ -126,6 +133,14 @@ class APIClient:
     def get_current_user(self) -> Dict[str, Any]:
         """Get current user info."""
         return self.get("/api/v1/auth/me")
+
+    def logout(self) -> Dict[str, Any]:
+        """Logout and invalidate current access token."""
+        return self.post("/api/v1/auth/logout", {})
+
+    def logout_all(self) -> Dict[str, Any]:
+        """Logout from all devices and invalidate all tokens."""
+        return self.post("/api/v1/auth/logout-all", {})
 
     # Session endpoints
     def create_session(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -167,6 +182,34 @@ class APIClient:
     def download_working_directory(self, session_id: str, output_path: Path) -> None:
         """Download session working directory."""
         self.download_file(f"/api/v1/sessions/{session_id}/workdir/download", output_path)
+
+    def fork_session(self, session_id: str) -> Dict[str, Any]:
+        """Fork an existing session."""
+        return self.post(f"/api/v1/sessions/{session_id}/fork", {})
+
+    def archive_session(self, session_id: str) -> Dict[str, Any]:
+        """Archive a session."""
+        return self.post(f"/api/v1/sessions/{session_id}/archive", {})
+
+    def get_session_archive_status(self, session_id: str) -> Dict[str, Any]:
+        """Get session archive status."""
+        return self.get(f"/api/v1/sessions/{session_id}/archive")
+
+    def get_session_hooks(self, session_id: str) -> Dict[str, Any]:
+        """Get session hooks configuration."""
+        return self.get(f"/api/v1/sessions/{session_id}/hooks")
+
+    def get_session_permissions(self, session_id: str) -> Dict[str, Any]:
+        """Get session permissions."""
+        return self.get(f"/api/v1/sessions/{session_id}/permissions")
+
+    def get_session_metrics_current(self, session_id: str) -> Dict[str, Any]:
+        """Get current session metrics."""
+        return self.get(f"/api/v1/sessions/{session_id}/metrics/current")
+
+    def get_session_metrics_snapshots(self, session_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Get session metrics snapshots."""
+        return self.get(f"/api/v1/sessions/{session_id}/metrics/snapshots", params)
 
     # Task endpoints
     def create_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -256,6 +299,73 @@ class APIClient:
     def get_mcp_templates(self) -> Dict[str, Any]:
         """Get MCP server templates."""
         return self.get("/api/v1/mcp-servers/templates")
+
+    # Session Template endpoints
+    def list_session_templates(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """List session templates."""
+        return self.get("/api/v1/session-templates", params)
+
+    def create_session_template(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new session template."""
+        return self.post("/api/v1/session-templates", data)
+
+    def get_session_template(self, template_id: str) -> Dict[str, Any]:
+        """Get session template by ID."""
+        return self.get(f"/api/v1/session-templates/{template_id}")
+
+    def update_session_template(self, template_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update session template."""
+        return self.put(f"/api/v1/session-templates/{template_id}", data)
+
+    def delete_session_template(self, template_id: str) -> None:
+        """Delete session template."""
+        return self.delete(f"/api/v1/session-templates/{template_id}")
+
+    def search_session_templates(self, query: Optional[str] = None, tags: Optional[list] = None) -> Dict[str, Any]:
+        """Search session templates."""
+        data = {}
+        if query:
+            data["query"] = query
+        if tags:
+            data["tags"] = tags
+        return self.post("/api/v1/session-templates/search", data)
+
+    def get_popular_templates(self) -> Dict[str, Any]:
+        """Get popular session templates."""
+        return self.get("/api/v1/session-templates/popular/top")
+
+    def update_template_sharing(self, template_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update template sharing settings."""
+        return self.patch(f"/api/v1/session-templates/{template_id}/sharing", data)
+
+    # Monitoring endpoints
+    def get_health(self) -> Dict[str, Any]:
+        """Get overall system health."""
+        return self.get("/api/v1/monitoring/health")
+
+    def get_database_health(self) -> Dict[str, Any]:
+        """Get database health status."""
+        return self.get("/api/v1/monitoring/health/database")
+
+    def get_sdk_health(self) -> Dict[str, Any]:
+        """Get SDK health status."""
+        return self.get("/api/v1/monitoring/health/sdk")
+
+    def get_storage_health(self) -> Dict[str, Any]:
+        """Get storage health status."""
+        return self.get("/api/v1/monitoring/health/storage")
+
+    def get_user_costs(self, user_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Get user cost information."""
+        return self.get(f"/api/v1/monitoring/costs/user/{user_id}", params)
+
+    def get_user_budget(self, user_id: str) -> Dict[str, Any]:
+        """Get user budget information."""
+        return self.get(f"/api/v1/monitoring/costs/budget/{user_id}")
+
+    def get_session_metrics(self, session_id: str) -> Dict[str, Any]:
+        """Get session-specific metrics."""
+        return self.get(f"/api/v1/monitoring/metrics/session/{session_id}")
 
     # Admin endpoints
     def get_system_stats(self) -> Dict[str, Any]:
