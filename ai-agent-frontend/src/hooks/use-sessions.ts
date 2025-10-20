@@ -57,6 +57,7 @@ export function useSessionMessages(sessionId: string) {
     queryFn: () => apiClient.getSessionMessages(sessionId),
     enabled: !!sessionId,
     staleTime: 5000, // 5 seconds
+    // Note: Polling removed - real-time updates via WebSocket
   });
 }
 
@@ -66,6 +67,7 @@ export function useSessionToolCalls(sessionId: string) {
     queryFn: () => apiClient.getSessionToolCalls(sessionId),
     enabled: !!sessionId,
     staleTime: 5000, // 5 seconds
+    // Note: Polling removed - real-time updates via WebSocket
   });
 }
 
@@ -220,7 +222,7 @@ export function useSessionMetrics(sessionId: string) {
     queryKey: ['session-metrics', sessionId],
     queryFn: () => apiClient.getCurrentSessionMetrics(sessionId),
     enabled: !!sessionId,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    // Note: Polling removed - real-time updates via WebSocket
   });
 }
 

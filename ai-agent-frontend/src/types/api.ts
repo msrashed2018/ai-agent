@@ -593,3 +593,44 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
 export type ArchiveStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 export type PermissionDecision = 'allow' | 'deny';
 export type HookType = 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Stop' | 'SubagentStop' | 'PreCompact';
+
+// ============================================================================
+// Admin Types
+// ============================================================================
+
+export interface AdminUserItem {
+  id: string;
+  email: string;
+  role: 'admin' | 'user';
+  is_deleted: boolean;
+  created_at: string;
+}
+
+export interface UserListResponse {
+  items: AdminUserItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+// ============================================================================
+// Monitoring Types
+// ============================================================================
+
+export interface BudgetStatusResponse {
+  user_id: string;
+  budget_limit: number;
+  current_usage: number;
+  remaining: number;
+  period: string;
+  alert_threshold: number;
+  is_exceeded: boolean;
+}
+
+export interface StorageHealthResponse {
+  status: HealthStatus;
+  storage_available: boolean;
+  disk_usage_percent: number;
+  message?: string;
+}

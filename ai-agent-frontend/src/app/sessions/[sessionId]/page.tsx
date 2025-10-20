@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SessionStats } from '@/components/sessions/session-stats';
 import { MessageBubble } from '@/components/sessions/message-bubble';
 import { ToolCallCard } from '@/components/sessions/tool-call-card';
+import { ConnectionStatusIndicator } from '@/components/sessions/connection-status';
 import {
   useSession,
   useSessionMessages,
@@ -18,6 +19,7 @@ import {
   useResumeSession,
   useDownloadWorkdir,
 } from '@/hooks/use-sessions';
+import { useSessionWebSocket } from '@/hooks/use-session-websocket';
 import {
   MessageSquare,
   Pause,
@@ -36,6 +38,11 @@ export default function SessionDetailPage() {
   const { data: session, isLoading: sessionLoading } = useSession(sessionId);
   const { data: messages, isLoading: messagesLoading } = useSessionMessages(sessionId);
   const { data: toolCalls, isLoading: toolCallsLoading } = useSessionToolCalls(sessionId);
+
+  // Enable WebSocket for real-time updates
+  const { connectionStatus, isConnected } = useSessionWebSocket(sessionId, {
+    enabled: session?.status === 'active' || session?.status === 'paused',
+  });
 
   const pauseSession = usePauseSession();
   const resumeSession = useResumeSession();
@@ -76,6 +83,9 @@ export default function SessionDetailPage() {
                 {session.name || `Session ${session.id.substring(0, 8)}`}
               </h1>
               <Badge className={getStatusColor(session.status)}>{session.status}</Badge>
+              {(session.status === 'active' || session.status === 'paused') && (
+                <ConnectionStatusIndicator status={connectionStatus} />
+              )}
             </div>
             {session.description && (
               <p className="text-gray-500 mt-1">{session.description}</p>

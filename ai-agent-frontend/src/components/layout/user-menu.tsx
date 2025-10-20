@@ -3,7 +3,7 @@
 import { LogOut, User, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
-import { apiClient } from '@/lib/api-client';
+import { useLogout } from '@/hooks/use-auth';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,12 +25,11 @@ function getUserInitials(email: string): string {
 
 export function UserMenu() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout: clearLocalAuth } = useAuthStore();
+  const logoutMutation = useLogout();
 
-  const handleLogout = () => {
-    apiClient.logout();
-    logout();
-    router.push('/auth/login');
+  const handleLogout = async () => {
+    await logoutMutation.mutateAsync();
   };
 
   if (!user) {
