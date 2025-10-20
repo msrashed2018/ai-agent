@@ -1,15 +1,15 @@
 """Base executor abstract class for all execution strategies."""
 from abc import ABC, abstractmethod
 from typing import Any, Dict
-import logging
 
 from app.domain.entities.session import Session
 from app.claude_sdk.core.client import EnhancedClaudeClient
 from app.claude_sdk.handlers.message_handler import MessageHandler
 from app.claude_sdk.handlers.result_handler import ResultHandler
 from app.claude_sdk.handlers.error_handler import ErrorHandler
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BaseExecutor(ABC):
@@ -60,8 +60,14 @@ class BaseExecutor(ABC):
         self.error_handler = error_handler
 
         logger.info(
-            f"{self.__class__.__name__} initialized for session {session.id}",
-            extra={"session_id": str(session.id), "executor_type": self.__class__.__name__},
+            "Base executor initialized",
+            extra={
+                "session_id": str(session.id),
+                "user_id": str(session.user_id),
+                "executor_type": self.__class__.__name__,
+                "session_mode": session.mode.value,
+                "session_status": session.status.value
+            }
         )
 
     @abstractmethod
@@ -93,13 +99,16 @@ class BaseExecutor(ABC):
             context: Additional context about the error
         """
         logger.error(
-            f"Error in {self.__class__.__name__}: {str(error)}",
+            "Executor error occurred",
             extra={
                 "session_id": str(self.session.id),
+                "user_id": str(self.session.user_id),
                 "executor_type": self.__class__.__name__,
                 "error_type": type(error).__name__,
+                "error_message": str(error),
                 "context": context,
-            },
+                "session_status": self.session.status.value
+            }
         )
 
         await self.error_handler.handle_sdk_error(

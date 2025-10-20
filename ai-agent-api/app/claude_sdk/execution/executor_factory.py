@@ -1,5 +1,4 @@
 """Factory for creating appropriate executor based on session mode."""
-import logging
 from typing import Optional, Any, Dict, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,8 +30,9 @@ from app.claude_sdk.hooks.implementations.validation_hook import ValidationHook
 from app.claude_sdk.hooks.implementations.notification_hook import NotificationHook
 from app.claude_sdk.permissions.permission_manager import PermissionManager
 from app.claude_sdk.permissions.policy_engine import PolicyEngine
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExecutorFactory:
@@ -70,8 +70,14 @@ class ExecutorFactory:
             ValueError: If session mode is unknown
         """
         logger.info(
-            f"Creating executor for session {session.id} (mode={session.mode.value})",
-            extra={"session_id": str(session.id), "mode": session.mode.value},
+            "Creating executor for session",
+            extra={
+                "session_id": str(session.id),
+                "user_id": str(session.user_id),
+                "mode": session.mode.value,
+                "status": session.status.value,
+                "has_event_broadcaster": event_broadcaster is not None
+            }
         )
 
         # Create hook and permission repositories
@@ -175,6 +181,13 @@ class ExecutorFactory:
 
         # Create executor based on session mode
         if session.mode == SessionMode.INTERACTIVE:
+            logger.info(
+                "Creating interactive executor with streaming",
+                extra={
+                    "session_id": str(session.id),
+                    "executor_type": "InteractiveExecutor"
+                }
+            )
             stream_handler = StreamHandler(db, message_repo, event_broadcaster)
             return InteractiveExecutor(
                 session=session,
@@ -187,6 +200,15 @@ class ExecutorFactory:
             )
 
         elif session.mode == SessionMode.BACKGROUND:
+            logger.info(
+                "Creating background executor for automation",
+                extra={
+                    "session_id": str(session.id),
+                    "executor_type": "BackgroundExecutor",
+                    "max_retries": session.max_retries or 3,
+                    "retry_delay": session.retry_delay or 2.0
+                }
+            )
             retry_policy = RetryPolicy(
                 max_retries=session.max_retries or 3,
                 base_delay=session.retry_delay or 2.0,

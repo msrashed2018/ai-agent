@@ -6,7 +6,6 @@ to our domain entities and persisting to database.
 Based on Document 5: Session Management - Message Processing Pipeline
 """
 
-import logging
 from typing import AsyncIterator, Any, Dict
 from uuid import UUID, uuid4
 from datetime import datetime
@@ -31,8 +30,9 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.tool_call_repository import ToolCallRepository
 from app.repositories.session_repository import SessionRepository
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessageProcessor:

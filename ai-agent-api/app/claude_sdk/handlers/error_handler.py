@@ -1,5 +1,4 @@
 """Error handler for centralized error handling and recovery logic."""
-import logging
 from typing import Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -9,8 +8,9 @@ from claude_agent_sdk import CLIConnectionError, ClaudeSDKError
 
 from app.repositories.session_repository import SessionRepository
 from app.services.audit_service import AuditService
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ErrorHandler:
@@ -102,16 +102,39 @@ class ErrorHandler:
         Returns:
             True if error is transient and should be retried, False otherwise
         """
+        error_type = type(error).__name__
+        
+        logger.debug(
+            "Evaluating error retryability",
+            extra={
+                "error_type": error_type,
+                "error_message": str(error)
+            }
+        )
+        
+        retryable = False
+        
         # Connection errors are retryable (transient network issues)
         if isinstance(error, CLIConnectionError):
-            return True
+            retryable = True
 
         # Other SDK errors are not retryable (permanent failures)
-        if isinstance(error, ClaudeSDKError):
-            return False
+        elif isinstance(error, ClaudeSDKError):
+            retryable = False
 
         # Unknown errors are not retryable by default
-        return False
+        else:
+            retryable = False
+        
+        logger.debug(
+            "Error retryability determined",
+            extra={
+                "error_type": error_type,
+                "retryable": retryable
+            }
+        )
+        
+        return retryable
 
     async def log_error(
         self, error: Exception, session_id: UUID, context: Dict[str, Any]
@@ -159,6 +182,14 @@ class ErrorHandler:
             Dictionary with error classification details
         """
         error_type = type(error).__name__
+        
+        logger.debug(
+            "Classifying error",
+            extra={
+                "error_type": error_type,
+                "error_message": str(error)
+            }
+        )
 
         classification = {
             "type": error_type,
@@ -174,5 +205,15 @@ class ErrorHandler:
         elif isinstance(error, ClaudeSDKError):
             classification["category"] = "sdk"
             classification["severity"] = "error"
+        
+        logger.debug(
+            "Error classification complete",
+            extra={
+                "error_type": error_type,
+                "category": classification["category"],
+                "severity": classification["severity"],
+                "is_retryable": classification["is_retryable"]
+            }
+        )
 
         return classification

@@ -1,5 +1,4 @@
 """Message handler for processing AssistantMessage from Claude SDK."""
-import logging
 from typing import Dict, Any, List, Optional
 from uuid import UUID, uuid4
 from datetime import datetime
@@ -11,8 +10,9 @@ from app.domain.value_objects.message import Message as DomainMessage, MessageTy
 from app.domain.value_objects.tool_call import ToolCall as DomainToolCall
 from app.repositories.message_repository import MessageRepository
 from app.repositories.tool_call_repository import ToolCallRepository
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessageHandler:
@@ -64,8 +64,13 @@ class MessageHandler:
             Exception: If persistence fails
         """
         logger.info(
-            f"Processing AssistantMessage: model={message.model}, blocks={len(message.content)}",
-            extra={"session_id": str(session_id)},
+            "Processing AssistantMessage from Claude SDK",
+            extra={
+                "session_id": str(session_id),
+                "model": message.model,
+                "content_blocks": len(message.content),
+                "message_role": message.role
+            }
         )
 
         # Extract all content

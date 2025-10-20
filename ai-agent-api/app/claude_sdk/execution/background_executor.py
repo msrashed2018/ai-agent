@@ -1,5 +1,4 @@
 """Background executor for automation tasks without streaming."""
-import logging
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from uuid import UUID
@@ -14,8 +13,9 @@ from app.claude_sdk.handlers.result_handler import ResultHandler
 from app.claude_sdk.handlers.error_handler import ErrorHandler
 from app.claude_sdk.execution.base_executor import BaseExecutor
 from app.claude_sdk.retry.retry_manager import RetryManager
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -81,8 +81,13 @@ class BackgroundExecutor(BaseExecutor):
             ExecutionResult: Execution outcome with metrics
         """
         logger.info(
-            f"BackgroundExecutor executing query (no streaming)",
-            extra={"session_id": str(self.session.id)},
+            "Background executor starting task execution",
+            extra={
+                "session_id": str(self.session.id),
+                "user_id": str(self.session.user_id),
+                "prompt_length": len(prompt),
+                "streaming_disabled": True
+            }
         )
 
         try:
@@ -94,6 +99,16 @@ class BackgroundExecutor(BaseExecutor):
 
             # Get final metrics
             metrics = await self.client.get_metrics()
+
+            logger.info(
+                "Background executor task completed successfully",
+                extra={
+                    "session_id": str(self.session.id),
+                    "user_id": str(self.session.user_id),
+                    "total_tokens": metrics.total_tokens if hasattr(metrics, 'total_tokens') else None,
+                    "total_cost": metrics.total_cost if hasattr(metrics, 'total_cost') else None
+                }
+            )
 
             return ExecutionResult(
                 session_id=self.session.id,

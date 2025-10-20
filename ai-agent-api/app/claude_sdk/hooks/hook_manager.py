@@ -1,5 +1,4 @@
 """Hook manager for orchestrating hook execution."""
-import logging
 import time
 from typing import Dict, Any, List, Optional
 from uuid import UUID
@@ -12,8 +11,9 @@ from app.claude_sdk.hooks.hook_registry import HookRegistry
 from app.claude_sdk.hooks.hook_context import HookContext
 from app.repositories.hook_execution_repository import HookExecutionRepository
 from app.models.hook_execution import HookExecutionModel
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class HookManager:
@@ -70,8 +70,13 @@ class HookManager:
         self.registry.register(hook_type, hook, actual_priority)
 
         logger.info(
-            f"Registered hook: type={hook_type.value}, "
-            f"class={hook.__class__.__name__}, priority={actual_priority}"
+            "Hook registered successfully",
+            extra={
+                "hook_type": hook_type.value,
+                "hook_class": hook.__class__.__name__,
+                "priority": actual_priority,
+                "enabled": hook.enabled
+            }
         )
 
     async def execute_hooks(

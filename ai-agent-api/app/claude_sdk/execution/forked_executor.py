@@ -1,5 +1,4 @@
 """Forked executor for session continuation from parent session."""
-import logging
 from typing import AsyncIterator, Optional
 from uuid import UUID
 
@@ -13,8 +12,9 @@ from app.claude_sdk.handlers.result_handler import ResultHandler
 from app.claude_sdk.handlers.error_handler import ErrorHandler
 from app.claude_sdk.execution.base_executor import BaseExecutor
 from app.repositories.message_repository import MessageRepository
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ForkedExecutor(BaseExecutor):
@@ -70,8 +70,14 @@ class ForkedExecutor(BaseExecutor):
             Exception: If execution fails
         """
         logger.info(
-            f"ForkedExecutor executing query (parent={self.parent_session_id}, fork_at={self.fork_at_message})",
-            extra={"session_id": str(self.session.id), "parent_session_id": str(self.parent_session_id)},
+            "Forked executor starting execution with context restoration",
+            extra={
+                "session_id": str(self.session.id),
+                "user_id": str(self.session.user_id),
+                "parent_session_id": str(self.parent_session_id),
+                "fork_at_message": self.fork_at_message,
+                "prompt_length": len(prompt)
+            }
         )
 
         try:

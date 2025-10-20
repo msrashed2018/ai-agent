@@ -14,7 +14,6 @@ Based on Document 5: Session Management Architecture
 """
 
 import asyncio
-import logging
 from typing import Dict, Optional, Callable
 from uuid import UUID
 
@@ -27,8 +26,9 @@ from app.claude_sdk.exceptions import (
     ClientNotFoundError,
     SDKConnectionError,
 )
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ClaudeSDKClientManager:
@@ -76,6 +76,17 @@ class ClaudeSDKClientManager:
             SDKConnectionError: If connection fails
         """
         session_id = session.id
+        
+        logger.info(
+            "Creating Claude SDK client for session",
+            extra={
+                "session_id": str(session_id),
+                "user_id": str(session.user_id),
+                "mode": session.mode.value,
+                "has_permission_callback": permission_callback is not None,
+                "hooks_count": len(hooks) if hooks else 0
+            }
+        )
 
         # Create lock for this session
         if session_id not in self._locks:
@@ -96,13 +107,35 @@ class ClaudeSDKClientManager:
             # Connect to Claude Code CLI
             try:
                 await client.connect(prompt=None)
-                logger.info(f"Connected SDK client for session {session_id}")
+                logger.info(
+                    "Claude SDK client connected successfully",
+                    extra={
+                        "session_id": str(session_id),
+                        "user_id": str(session.user_id)
+                    }
+                )
             except Exception as e:
-                logger.error(f"Failed to connect SDK client: {e}")
+                logger.error(
+                    "Failed to connect Claude SDK client",
+                    extra={
+                        "session_id": str(session_id),
+                        "user_id": str(session.user_id),
+                        "error": str(e)
+                    }
+                )
                 raise SDKConnectionError(f"Failed to connect to Claude Code CLI: {e}") from e
 
             # Store in pool
             self._clients[session_id] = client
+            
+            logger.info(
+                "Claude SDK client created and stored in pool",
+                extra={
+                    "session_id": str(session_id),
+                    "active_clients": len(self._clients)
+                }
+            )
+            
             return client
 
     async def get_client(self, session_id: UUID) -> ClaudeSDKClient:
@@ -117,13 +150,24 @@ class ClaudeSDKClientManager:
 
     async def disconnect_client(self, session_id: UUID) -> None:
         """Disconnect and remove SDK client."""
+        logger.info(
+            "Disconnecting Claude SDK client",
+            extra={
+                "session_id": str(session_id),
+                "active_clients_before": len(self._clients)
+            }
+        )
+        
         lock = self._locks.get(session_id, asyncio.Lock())
         async with lock:
             if session_id in self._clients:
                 client = self._clients[session_id]
                 try:
                     await client.disconnect()
-                    logger.info(f"Disconnected SDK client for session {session_id}")
+                    logger.info(
+                        "Claude SDK client disconnected successfully",
+                        extra={"session_id": str(session_id)}
+                    )
                 except Exception as e:
                     logger.error(f"Error disconnecting client: {e}")
                 finally:

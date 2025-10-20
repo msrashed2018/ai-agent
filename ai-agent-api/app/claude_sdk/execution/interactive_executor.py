@@ -1,5 +1,4 @@
 """Interactive executor for real-time chat sessions with streaming."""
-import logging
 from typing import AsyncIterator, Optional, Any
 
 from claude_agent_sdk import AssistantMessage, ResultMessage
@@ -13,8 +12,9 @@ from app.claude_sdk.handlers.stream_handler import StreamHandler
 from app.claude_sdk.handlers.result_handler import ResultHandler
 from app.claude_sdk.handlers.error_handler import ErrorHandler
 from app.claude_sdk.execution.base_executor import BaseExecutor
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class InteractiveExecutor(BaseExecutor):
@@ -67,8 +67,14 @@ class InteractiveExecutor(BaseExecutor):
             Exception: If execution fails
         """
         logger.info(
-            f"InteractiveExecutor executing query with streaming",
-            extra={"session_id": str(self.session.id)},
+            "Interactive executor starting streaming execution",
+            extra={
+                "session_id": str(self.session.id),
+                "user_id": str(self.session.user_id),
+                "prompt_length": len(prompt),
+                "has_event_broadcaster": self.event_broadcaster is not None,
+                "streaming_enabled": True
+            }
         )
 
         try:

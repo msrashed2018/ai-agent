@@ -1,6 +1,5 @@
 """Enhanced Claude SDK client with retry logic and metrics tracking."""
 import asyncio
-import logging
 from typing import Optional, AsyncIterator, Union
 from uuid import UUID
 
@@ -10,8 +9,9 @@ from claude_agent_sdk.types import StreamEvent
 from claude_agent_sdk import CLIConnectionError, ClaudeSDKError
 
 from app.claude_sdk.core.config import ClientConfig, ClientMetrics, ClientState
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EnhancedClaudeClient:
@@ -46,8 +46,14 @@ class EnhancedClaudeClient:
         self._sdk_options: Optional[ClaudeAgentOptions] = None
 
         logger.info(
-            f"EnhancedClaudeClient created for session {config.session_id}",
-            extra={"session_id": str(config.session_id), "model": config.model},
+            "Enhanced Claude client initialized",
+            extra={
+                "session_id": str(config.session_id),
+                "model": config.model,
+                "max_retries": config.max_retries,
+                "timeout_seconds": config.timeout_seconds,
+                "state": self.state.value
+            }
         )
 
     async def connect(self) -> None:
