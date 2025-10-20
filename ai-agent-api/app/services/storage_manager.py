@@ -7,6 +7,9 @@ from typing import Optional
 from uuid import UUID
 from datetime import datetime
 from app.core.config import settings
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class StorageManager:
@@ -19,8 +22,25 @@ class StorageManager:
 
     async def create_working_directory(self, session_id: UUID) -> Path:
         """Create a working directory for a session."""
+        logger.debug(
+            "Creating working directory",
+            extra={
+                "session_id": str(session_id),
+                "base_workdir": str(self.base_workdir)
+            }
+        )
+        
         workdir = self.base_workdir / str(session_id)
         workdir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(
+            "Working directory created successfully",
+            extra={
+                "session_id": str(session_id),
+                "workdir_path": str(workdir)
+            }
+        )
+        
         return workdir
 
     async def get_working_directory(self, session_id: UUID) -> Optional[Path]:
@@ -33,15 +53,57 @@ class StorageManager:
     async def delete_working_directory(self, session_id: UUID) -> bool:
         """Delete a session's working directory."""
         workdir = self.base_workdir / str(session_id)
+        
+        logger.debug(
+            "Attempting to delete working directory",
+            extra={
+                "session_id": str(session_id),
+                "workdir_path": str(workdir),
+                "exists": workdir.exists()
+            }
+        )
+        
         if workdir.exists():
             shutil.rmtree(workdir)
+            logger.info(
+                "Working directory deleted successfully",
+                extra={
+                    "session_id": str(session_id),
+                    "workdir_path": str(workdir)
+                }
+            )
             return True
+        
+        logger.debug(
+            "Working directory not found for deletion",
+            extra={
+                "session_id": str(session_id),
+                "workdir_path": str(workdir)
+            }
+        )
         return False
 
     async def archive_working_directory(self, session_id: UUID) -> Optional[Path]:
         """Archive a session's working directory to tar.gz."""
         workdir = self.base_workdir / str(session_id)
+        
+        logger.info(
+            "Starting working directory archival",
+            extra={
+                "session_id": str(session_id),
+                "workdir_path": str(workdir),
+                "exists": workdir.exists()
+            }
+        )
+        
         if not workdir.exists():
+            logger.warning(
+                "Working directory not found for archival",
+                extra={
+                    "session_id": str(session_id),
+                    "workdir_path": str(workdir)
+                }
+            )
             return None
 
         # Create archive directory if it doesn't exist
@@ -56,6 +118,15 @@ class StorageManager:
 
         # Delete original directory
         shutil.rmtree(workdir)
+        
+        logger.info(
+            "Working directory archived successfully",
+            extra={
+                "session_id": str(session_id),
+                "archive_path": str(archive_path),
+                "archive_size": archive_path.stat().st_size
+            }
+        )
 
         return archive_path
 

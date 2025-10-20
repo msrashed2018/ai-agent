@@ -14,6 +14,9 @@ from app.schemas.mcp import (
     MCPServerUpdateRequest,
     MCPServerResponse,
 )
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class MCPServerService:
@@ -43,11 +46,29 @@ class MCPServerService:
         Returns:
             Created server response
         """
+        logger.info(
+            "Creating MCP server",
+            extra={
+                "user_id": str(user.id),
+                "server_name": server_data.name,
+                "server_type": server_data.type,
+                "enabled": server_data.enabled
+            }
+        )
+        
         # Check if server with name already exists for user
         existing = await self.mcp_server_repo.get_by_name_and_user(
             server_data.name, user.id
         )
         if existing:
+            logger.warning(
+                "MCP server creation failed - name already exists",
+                extra={
+                    "user_id": str(user.id),
+                    "server_name": server_data.name,
+                    "existing_server_id": str(existing.id)
+                }
+            )
             raise ValueError(f"MCP server with name '{server_data.name}' already exists")
 
         # Create server
@@ -60,6 +81,16 @@ class MCPServerService:
             is_enabled=server_data.is_enabled,
             user_id=user.id,
             created_at=datetime.utcnow(),
+        )
+
+        logger.info(
+            "MCP server created successfully",
+            extra={
+                "user_id": str(user.id),
+                "server_id": str(saved_server.id),
+                "server_name": server_data.name,
+                "server_type": server_data.server_type
+            }
         )
 
         # Audit log

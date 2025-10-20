@@ -115,14 +115,37 @@ class SDKIntegratedSessionService(SessionService):
             ...     if message.message_type == MessageType.ASSISTANT:
             ...         print(f"Claude: {message.content}")
         """
+        logger.info(
+            f"Starting message send to Claude",
+            extra={
+                "session_id": str(session_id),
+                "user_id": str(user_id),
+                "message_length": len(message_text),
+                "message_preview": message_text[:100] + "..." if len(message_text) > 100 else message_text
+            }
+        )
+        
         # 1. Get and validate session
         session = await self.get_session(session_id, user_id)
         
         if session.status not in [SessionStatus.CREATED, SessionStatus.ACTIVE, SessionStatus.CONNECTING]:
+            logger.warning(
+                f"Message send rejected - invalid session state",
+                extra={
+                    "session_id": str(session_id),
+                    "current_status": session.status.value,
+                    "valid_statuses": ["created", "active", "connecting"]
+                }
+            )
             raise SessionNotActiveError(f"Session {session_id} is not in a valid state for messaging")
 
         # 2. Update status following proper state transitions
         if session.status == SessionStatus.CREATED:
+            logger.info(
+                f"Initializing new session for first message",
+                extra={"session_id": str(session_id)}
+            )
+            
             # CREATED → CONNECTING (when initializing SDK client)
             session.transition_to(SessionStatus.CONNECTING)
             await self.session_repo.update(session_id, status=SessionStatus.CONNECTING.value)
@@ -130,12 +153,21 @@ class SDKIntegratedSessionService(SessionService):
             
             # Setup SDK client during CONNECTING phase
             if not self.sdk_client_manager.has_client(session_id):
+                logger.info(
+                    f"Setting up SDK client for session",
+                    extra={"session_id": str(session_id)}
+                )
                 await self._setup_sdk_client(session, user_id)
             
             # CONNECTING → ACTIVE (after SDK client is ready)
             session.transition_to(SessionStatus.ACTIVE)
             await self.session_repo.update(session_id, status=SessionStatus.ACTIVE.value)
             await self.db.commit()
+            
+            logger.info(
+                f"Session initialization completed",
+                extra={"session_id": str(session_id)}
+            )
 
         # ACTIVE → PROCESSING (while handling message)
         session.transition_to(SessionStatus.PROCESSING)
@@ -144,12 +176,21 @@ class SDKIntegratedSessionService(SessionService):
 
         try:
             # 3. Get SDK client (already created in CONNECTING phase if it was a new session)
+            logger.debug(f"Getting SDK client for session {session_id}")
             client = await self.sdk_client_manager.get_client(session_id)
 
             # 4. Send message through SDK
+            logger.info(
+                f"Sending message to Claude SDK",
+                extra={
+                    "session_id": str(session_id),
+                    "message_length": len(message_text)
+                }
+            )
             await client.query(message_text)
 
             # 5. Process response stream
+            logger.debug(f"Starting message stream processing for session {session_id}")
             message_processor = MessageProcessor(
                 db=self.db,
                 message_repo=self.message_repo,
@@ -158,12 +199,31 @@ class SDKIntegratedSessionService(SessionService):
                 event_broadcaster=self.event_broadcaster,
             )
 
+            message_count = 0
             # Stream and process messages
             async for message in message_processor.process_message_stream(
                 session=session,
                 sdk_messages=client.receive_response(),
             ):
+                message_count += 1
+                logger.debug(
+                    f"Processing message from stream",
+                    extra={
+                        "session_id": str(session_id),
+                        "message_id": str(message.id),
+                        "message_type": message.message_type.value,
+                        "sequence_number": message.sequence_number
+                    }
+                )
                 yield message
+
+            logger.info(
+                f"Message stream processing completed",
+                extra={
+                    "session_id": str(session_id),
+                    "messages_processed": message_count
+                }
+            )
 
             # 6. Update status back to ACTIVE
             session.transition_to(SessionStatus.ACTIVE)
@@ -171,7 +231,15 @@ class SDKIntegratedSessionService(SessionService):
             await self.db.commit()
 
         except Exception as e:
-            logger.error(f"Error sending message in session {session_id}: {e}")
+            logger.error(
+                f"Error sending message in session",
+                extra={
+                    "session_id": str(session_id),
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                },
+                exc_info=True
+            )
             
             # Mark session as failed
             session.transition_to(SessionStatus.FAILED)
@@ -195,6 +263,14 @@ class SDKIntegratedSessionService(SessionService):
         4. Sets up hooks for audit, tracking, and cost monitoring
         5. Creates SDK client with all configurations
         """
+        logger.info(
+            f"Starting SDK client setup",
+            extra={
+                "session_id": str(session.id),
+                "user_id": str(user_id)
+            }
+        )
+        
         from claude_agent_sdk.types import HookMatcher
         from app.mcp import MCPConfigBuilder
         from app.repositories.mcp_server_repository import MCPServerRepository
@@ -206,14 +282,28 @@ class SDKIntegratedSessionService(SessionService):
         mcp_server_repo = MCPServerRepository(self.db)
         mcp_config_builder = MCPConfigBuilder(mcp_server_repo)
         
-        logger.info(f"Building MCP config for session {session.id}, user {user_id}")
+        logger.info(
+            f"Building MCP config for session",
+            extra={
+                "session_id": str(session.id),
+                "user_id": str(user_id)
+            }
+        )
         mcp_config = await mcp_config_builder.build_session_mcp_config(
             user_id=user_id,
             include_sdk_tools=True,  # Include SDK tools (7 tools across 3 servers)
         )
-        logger.info(f"Built MCP config with {len(mcp_config)} servers: {list(mcp_config.keys())}")
+        logger.info(
+            f"Built MCP config successfully",
+            extra={
+                "session_id": str(session.id),
+                "mcp_servers_count": len(mcp_config),
+                "mcp_server_names": list(mcp_config.keys())
+            }
+        )
 
         # 2. Merge MCP config into session's sdk_options
+        logger.debug(f"Merging MCP config into session SDK options")
         sdk_options_dict = session.sdk_options.to_dict() if session.sdk_options else {}
         sdk_options_dict["mcp_servers"] = mcp_config
 
@@ -226,7 +316,14 @@ class SDKIntegratedSessionService(SessionService):
             sdk_options=sdk_options_dict
         )
         await self.db.commit()
-        logger.info(f"Updated session {session.id} with merged MCP config")
+        
+        logger.info(
+            f"Updated session with merged MCP config",
+            extra={
+                "session_id": str(session.id),
+                "total_mcp_servers": len(mcp_config)
+            }
+        )
 
         # 3. Create permission callback
         permission_callback = self.permission_service.create_permission_callback(

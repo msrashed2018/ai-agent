@@ -48,6 +48,9 @@ from app.schemas.session import (
 )
 from app.schemas.common import PaginationParams, PaginatedResponse, Links
 from app.schemas.mappers import session_to_response
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -68,6 +71,15 @@ async def create_session(
     If template_id is provided, the session will be created using the template's
     configuration as defaults, which can be overridden by request parameters.
     """
+    logger.info(
+        "Creating new session",
+        extra={
+            "user_id": str(current_user.id),
+            "title": request.title,
+            "mode": request.mode.value if request.mode else "unknown",
+            "template_id": str(request.template_id) if request.template_id else None
+        }
+    )
     # Initialize all required dependencies
     from app.repositories.session_repository import SessionRepository
     from app.repositories.message_repository import MessageRepository
@@ -229,6 +241,17 @@ async def create_session(
         stream=f"/api/v1/sessions/{session.id}/stream",
     )
 
+    logger.info(
+        "Session created successfully",
+        extra={
+            "user_id": str(current_user.id),
+            "session_id": str(session.id),
+            "title": request.title,
+            "mode": request.mode.value if request.mode else "unknown",
+            "status": session.status
+        }
+    )
+
     return response
 
 
@@ -243,6 +266,14 @@ async def get_session(
     
     Returns full session information including statistics and metadata.
     """
+    logger.debug(
+        "Getting session by ID",
+        extra={
+            "session_id": str(session_id),
+            "user_id": str(current_user.id)
+        }
+    )
+    
     repo = SessionRepository(db)
     session = await repo.get_by_id(str(session_id))
     
@@ -267,6 +298,15 @@ async def get_session(
         messages=f"/api/v1/sessions/{session.id}/messages",
         tool_calls=f"/api/v1/sessions/{session.id}/tool-calls",
         stream=f"/api/v1/sessions/{session.id}/stream",
+    )
+    
+    logger.debug(
+        "Session retrieved successfully",
+        extra={
+            "session_id": str(session_id),
+            "user_id": str(current_user.id),
+            "session_status": session.status
+        }
     )
     
     return response
@@ -334,6 +374,15 @@ async def send_message(
     Sends a user message to Claude Code and processes the response.
     Optionally forks the session before sending the message.
     """
+    logger.info(
+        "Sending message to session",
+        extra={
+            "session_id": str(session_id),
+            "user_id": str(current_user.id),
+            "message_length": len(request.message),
+            "fork_session": request.fork_session
+        }
+    )
     # Initialize all required dependencies
     from app.repositories.message_repository import MessageRepository
     from app.repositories.tool_call_repository import ToolCallRepository
@@ -418,6 +467,17 @@ async def send_message(
         self=f"/api/v1/sessions/{session.id}",
         message=f"/api/v1/sessions/{session.id}/messages/{message.id}",
         stream=f"/api/v1/sessions/{session.id}/stream",
+    )
+    
+    logger.info(
+        "Message sent successfully",
+        extra={
+            "session_id": str(session_id),
+            "user_id": str(current_user.id),
+            "message_id": str(last_message.id) if last_message else None,
+            "session_status": session.status,
+            "is_fork": session.is_fork
+        }
     )
     
     return response
@@ -515,6 +575,15 @@ async def resume_session(
     Reactivates the session for continued interaction.
     Optionally forks the session before resuming.
     """
+    logger.info(
+        "Resuming session",
+        extra={
+            "session_id": str(session_id),
+            "user_id": str(current_user.id),
+            "fork": request.fork
+        }
+    )
+    
     service = SDKIntegratedSessionService(db)
     
     # Get session
@@ -553,6 +622,16 @@ async def resume_session(
         self=f"/api/v1/sessions/{session.id}",
         query=f"/api/v1/sessions/{session.id}/query",
         messages=f"/api/v1/sessions/{session.id}/messages",
+    )
+    
+    logger.info(
+        "Session resumed successfully",
+        extra={
+            "session_id": str(session_id),
+            "user_id": str(current_user.id),
+            "session_status": session.status,
+            "fork_created": request.fork and str(session.id) != str(session_id)
+        }
     )
     
     return response
@@ -612,6 +691,14 @@ async def terminate_session(
     
     Permanently ends the session and disconnects the SDK client.
     """
+    logger.info(
+        "Terminating session",
+        extra={
+            "session_id": str(session_id),
+            "user_id": str(current_user.id)
+        }
+    )
+    
     service = SDKIntegratedSessionService(db)
     
     # Get session
@@ -633,6 +720,14 @@ async def terminate_session(
     
     # Terminate session
     await service.terminate_session(str(session_id))
+    
+    logger.info(
+        "Session terminated successfully",
+        extra={
+            "session_id": str(session_id),
+            "user_id": str(current_user.id)
+        }
+    )
 
 
 @router.get("/{session_id}/workdir/download")

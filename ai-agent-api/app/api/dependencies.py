@@ -2,79 +2,88 @@
 FastAPI dependencies for dependency injection.
 """
 
-from typing import AsyncGenerator, Optional
-from fastapi import Depends, HTTPException, status, WebSocket
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
 import jwt
+from fastapi import Depends, HTTPException, WebSocket, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.session import get_db as get_db_session
 from app.core.config import settings
+from app.core.logging import get_logger
+from app.database.session import get_db as get_db_session
 from app.domain.entities import User
 from app.repositories.user_repository import UserRepository
-
+from app.services.token_service import TokenService, get_token_service
 
 # Security scheme
 security = HTTPBearer()
+logger = get_logger(__name__)
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db_session),
+    token_service: TokenService = Depends(get_token_service),
 ) -> User:
     """
     Get current authenticated user from JWT token.
-    
+
     Args:
         credentials: HTTP Bearer credentials with JWT token
         db: Database session
-    
+        token_service: Token service for blacklist checking
+
     Returns:
         User: Authenticated user
-    
+
     Raises:
-        HTTPException: If token is invalid or user not found
+        HTTPException: If token is invalid, expired, or blacklisted
     """
     token = credentials.credentials
-    
-    try:
-        # Decode JWT token
-        payload = jwt.decode(
-            token,
-            settings.secret_key,
-            algorithms=[settings.jwt_algorithm],
-        )
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    except jwt.ExpiredSignatureError:
+    logger.debug(f"Authenticating request with token: {token[:20]}...")
+
+    # Validate token claims and check blacklist using token service
+    is_valid, token_data = await token_service.validate_token_claims(token, "access")
+
+    if not is_valid:
+        logger.warning("Token validation failed: token is invalid or expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
+            detail="Token has expired or been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.InvalidTokenError:
+
+    if not token_data:
+        logger.error("Token validation returned no data")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
+            detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
+    user_id = token_data.get("user_id")
+    if not user_id:
+        logger.error("Token data missing user_id")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    logger.debug(f"Token validated, fetching user {user_id} from database")
+
     # Get user from database
     user_repo = UserRepository(db)
     user = await user_repo.get_by_id(user_id)
-    
+
     if user is None:
+        logger.warning(f"User {user_id} not found in database")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
+    logger.info(f"User {user.email} authenticated successfully")
     return user
 
 
@@ -83,13 +92,13 @@ async def get_current_active_user(
 ) -> User:
     """
     Get current active user (non-deleted).
-    
+
     Args:
         current_user: Current authenticated user
-    
+
     Returns:
         User: Active user
-    
+
     Raises:
         HTTPException: If user is deleted
     """
@@ -106,13 +115,13 @@ async def require_admin(
 ) -> User:
     """
     Require admin role.
-    
+
     Args:
         current_user: Current authenticated user
-    
+
     Returns:
         User: Admin user
-    
+
     Raises:
         HTTPException: If user is not admin
     """
@@ -125,22 +134,22 @@ async def require_admin(
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
     db: AsyncSession = Depends(get_db_session),
-) -> Optional[User]:
+) -> User | None:
     """
     Get optional authenticated user (for endpoints that work with/without auth).
-    
+
     Args:
         credentials: Optional HTTP Bearer credentials
         db: Database session
-    
+
     Returns:
         Optional[User]: Authenticated user or None
     """
     if credentials is None:
         return None
-    
+
     try:
         payload = jwt.decode(
             credentials.credentials,
@@ -150,7 +159,7 @@ async def get_optional_user(
         user_id: str = payload.get("sub")
         if user_id is None:
             return None
-        
+
         user_repo = UserRepository(db)
         user = await user_repo.get_by_id(user_id)
         return user
@@ -162,37 +171,40 @@ async def get_websocket_user(
     websocket: WebSocket,
     token: str,
     db: AsyncSession = Depends(get_db_session),
+    token_service: TokenService = Depends(get_token_service),
 ) -> User:
     """
     Authenticate WebSocket connection with JWT token.
-    
+
     Args:
         websocket: WebSocket connection
         token: JWT token from query parameter
         db: Database session
-    
+        token_service: Token service for blacklist checking
+
     Returns:
         User: Authenticated user
-    
+
     Raises:
         Exception: If authentication fails (WebSocket will be closed)
     """
     try:
-        payload = jwt.decode(
-            token,
-            settings.secret_key,
-            algorithms=[settings.jwt_algorithm],
-        )
-        user_id: str = payload.get("sub")
-        if user_id is None:
+        # Validate token using token service (includes blacklist check)
+        is_valid, token_data = await token_service.validate_token_claims(token, "access")
+
+        if not is_valid or not token_data:
+            raise ValueError("Token has expired or been revoked")
+
+        user_id = token_data.get("user_id")
+        if not user_id:
             raise ValueError("Invalid token")
-        
+
         user_repo = UserRepository(db)
         user = await user_repo.get_by_id(user_id)
-        
+
         if user is None or user.deleted_at is not None:
             raise ValueError("User not found or deleted")
-        
+
         return user
     except Exception as e:
         await websocket.close(code=1008, reason=f"Authentication failed: {str(e)}")

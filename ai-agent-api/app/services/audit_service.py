@@ -4,6 +4,9 @@ from uuid import UUID
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit_log import AuditLogModel
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class AuditService:
@@ -27,6 +30,20 @@ class AuditService:
         request_id: Optional[str] = None,
     ) -> AuditLogModel:
         """Log an action to the audit trail."""
+        logger.debug(
+            "Logging audit action",
+            extra={
+                "action_type": action_type,
+                "user_id": str(user_id) if user_id else None,
+                "session_id": str(session_id) if session_id else None,
+                "resource_type": resource_type,
+                "resource_id": str(resource_id) if resource_id else None,
+                "status": status,
+                "ip_address": ip_address,
+                "request_id": request_id
+            }
+        )
+        
         audit_log = AuditLogModel(
             user_id=user_id,
             session_id=session_id,
@@ -44,6 +61,18 @@ class AuditService:
 
         self.db.add(audit_log)
         await self.db.flush()
+        
+        logger.info(
+            "Audit action logged successfully",
+            extra={
+                "action_type": action_type,
+                "audit_log_id": str(audit_log.id),
+                "user_id": str(user_id) if user_id else None,
+                "session_id": str(session_id) if session_id else None,
+                "status": status
+            }
+        )
+        
         return audit_log
 
     async def log_session_created(
@@ -56,6 +85,17 @@ class AuditService:
         request_id: Optional[str] = None,
     ) -> AuditLogModel:
         """Log session creation."""
+        logger.info(
+            "Recording session creation in audit log",
+            extra={
+                "session_id": str(session_id),
+                "user_id": str(user_id),
+                "mode": mode,
+                "ip_address": ip_address,
+                "request_id": request_id
+            }
+        )
+        
         return await self.log_action(
             action_type="session.created",
             user_id=user_id,

@@ -15,6 +15,9 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.mcp_server_repository import MCPServerRepository
 from app.services.audit_service import AuditService
 from app.models.session_template import SessionTemplateModel
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class SessionTemplateService:
@@ -51,9 +54,28 @@ class SessionTemplateService:
         template_metadata: Optional[dict] = None,
     ) -> SessionTemplate:
         """Create a new session template."""
+        logger.info(
+            "Creating session template",
+            extra={
+                "user_id": str(user_id),
+                "template_name": name,
+                "category": category.value if category else None,
+                "is_public": is_public,
+                "is_organization_shared": is_organization_shared,
+                "mcp_servers_count": len(mcp_server_ids) if mcp_server_ids else 0
+            }
+        )
+        
         # 1. Validate user exists
         user = await self.user_repo.get_by_id(str(user_id))
         if not user:
+            logger.warning(
+                "Template creation failed - user not found",
+                extra={
+                    "user_id": str(user_id),
+                    "template_name": name
+                }
+            )
             raise ValidationError("User not found")
 
         # 2. Validate MCP servers if provided

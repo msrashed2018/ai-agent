@@ -25,8 +25,9 @@ from app.repositories.session_repository import SessionRepository
 from app.repositories.mcp_server_repository import MCPServerRepository
 from app.services.audit_service import AuditService
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PermissionService:
@@ -103,22 +104,52 @@ class PermissionService:
         Returns:
             PermissionResultAllow or PermissionResultDeny
         """
+        logger.info(
+            f"Checking tool permission",
+            extra={
+                "session_id": str(session_id),
+                "user_id": str(user_id),
+                "tool_name": tool_name,
+                "tool_input_keys": list(tool_input.keys()) if tool_input else [],
+                "has_context": context is not None
+            }
+        )
+        
         # Get user and validate
         user = await self.user_repo.get_by_id(user_id)
         if not user or not user.is_active:
+            logger.warning(
+                f"Permission denied - user not found or inactive",
+                extra={
+                    "session_id": str(session_id),
+                    "user_id": str(user_id),
+                    "tool_name": tool_name,
+                    "user_exists": user is not None,
+                    "user_active": user.is_active if user else None
+                }
+            )
             await self.audit_service.log_permission_denied(
                 session_id=session_id,
                 user_id=user_id,
                 tool_name=tool_name,
                 tool_input=tool_input,
-                reason="User not active",
+                reason="User not found or inactive",
             )
             return PermissionResultDeny(
-                message="User not active",
+                message="User not found or inactive",
                 interrupt=True
             )
 
         # Route to specific permission checker
+        logger.debug(
+            f"Routing to specific permission checker",
+            extra={
+                "session_id": str(session_id),
+                "tool_name": tool_name,
+                "user_role": user.role.value if user.role else None
+            }
+        )
+        
         if tool_name == "Bash":
             return await self._check_bash_permission(
                 session_id, user, tool_input, context
@@ -133,6 +164,14 @@ class PermissionService:
             )
         else:
             # Default: allow builtin read tools
+            logger.info(
+                f"Permission granted for built-in read tool",
+                extra={
+                    "session_id": str(session_id),
+                    "tool_name": tool_name,
+                    "user_id": str(user.id)
+                }
+            )
             await self.audit_service.log_permission_allowed(
                 session_id=session_id,
                 user_id=user.id,
@@ -150,10 +189,29 @@ class PermissionService:
     ) -> PermissionResult:
         """Check Bash command permission."""
         command = tool_input.get("command", "")
+        
+        logger.debug(
+            f"Checking bash permission",
+            extra={
+                "session_id": str(session_id),
+                "user_id": str(user.id),
+                "command_length": len(command),
+                "command_preview": command[:100] + "..." if len(command) > 100 else command
+            }
+        )
 
         # Check for dangerous commands
         for pattern in self.dangerous_commands:
             if re.search(pattern, command, re.IGNORECASE):
+                logger.warning(
+                    f"Dangerous bash command blocked",
+                    extra={
+                        "session_id": str(session_id),
+                        "user_id": str(user.id),
+                        "command": command,
+                        "matched_pattern": pattern
+                    }
+                )
                 await self.audit_service.log_permission_denied(
                     session_id=session_id,
                     user_id=user.id,
@@ -175,7 +233,27 @@ class PermissionService:
             ]
             cmd_name = command.split()[0] if command.strip() else ""
 
+            logger.debug(
+                f"Checking viewer role restrictions",
+                extra={
+                    "session_id": str(session_id),
+                    "user_id": str(user.id),
+                    "command_name": cmd_name,
+                    "is_readonly": cmd_name in readonly_commands
+                }
+            )
+
             if cmd_name not in readonly_commands:
+                logger.warning(
+                    f"Viewer role command blocked - not read-only",
+                    extra={
+                        "session_id": str(session_id),
+                        "user_id": str(user.id),
+                        "command": command,
+                        "command_name": cmd_name,
+                        "allowed_commands": readonly_commands
+                    }
+                )
                 await self.audit_service.log_permission_denied(
                     session_id=session_id,
                     user_id=user.id,
@@ -189,6 +267,15 @@ class PermissionService:
                 )
 
         # Allow command
+        logger.info(
+            f"Bash command permission granted",
+            extra={
+                "session_id": str(session_id),
+                "user_id": str(user.id),
+                "user_role": user.role.value if user.role else None,
+                "command_name": command.split()[0] if command.strip() else ""
+            }
+        )
         await self.audit_service.log_permission_allowed(
             session_id=session_id,
             user_id=user.id,

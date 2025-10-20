@@ -10,6 +10,9 @@ from app.repositories.task_repository import TaskRepository
 from app.repositories.task_execution_repository import TaskExecutionRepository
 from app.repositories.user_repository import UserRepository
 from app.services.audit_service import AuditService
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class TaskService:
@@ -45,6 +48,17 @@ class TaskService:
         tags: Optional[list[str]] = None,
     ) -> Task:
         """Create a new task."""
+        logger.info(
+            "Creating new task",
+            extra={
+                "user_id": str(user_id),
+                "task_name": name,
+                "is_scheduled": is_scheduled,
+                "generate_report": generate_report,
+                "allowed_tools_count": len(allowed_tools)
+            }
+        )
+        
         # Create task entity
         task = Task(
             id=uuid4(),

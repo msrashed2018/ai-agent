@@ -11,6 +11,9 @@ from app.repositories.session_repository import SessionRepository
 from app.repositories.user_repository import UserRepository
 from app.services.storage_manager import StorageManager
 from app.services.audit_service import AuditService
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ReportService:
@@ -43,9 +46,27 @@ class ReportService:
         tags: Optional[list[str]] = None,
     ) -> Report:
         """Generate a report from session outputs."""
+        logger.info(
+            "Generating report from session",
+            extra={
+                "session_id": str(session_id),
+                "user_id": str(user_id),
+                "title": title,
+                "report_type": report_type.value if report_type else None,
+                "file_format": file_format.value if file_format else None
+            }
+        )
+        
         # Verify session access
         session_model = await self.session_repo.get_by_id(session_id)
         if not session_model:
+            logger.warning(
+                "Report generation failed - session not found",
+                extra={
+                    "session_id": str(session_id),
+                    "user_id": str(user_id)
+                }
+            )
             raise SessionNotFoundError(f"Session {session_id} not found")
         
         if session_model.user_id != user_id:

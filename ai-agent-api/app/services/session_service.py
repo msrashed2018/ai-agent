@@ -57,6 +57,17 @@ class SessionService:
         parent_session_id: Optional[UUID] = None,
     ) -> Session:
         """Create and initialize a new session."""
+        logger.info(
+            f"Starting session creation",
+            extra={
+                "user_id": str(user_id),
+                "mode": mode.value,
+                "name": name,
+                "parent_session_id": str(parent_session_id) if parent_session_id else None,
+                "sdk_options_keys": list(sdk_options.keys()) if sdk_options else []
+            }
+        )
+        
         # 1. Validate user quotas
         await self._validate_user_quotas(user_id)
 
@@ -74,8 +85,16 @@ class SessionService:
             session.is_fork = True
 
         # 3. Create working directory
+        logger.debug(f"Creating working directory for session {session.id}")
         workdir = await self.storage_manager.create_working_directory(session.id)
         session.working_directory_path = str(workdir)
+        logger.info(
+            f"Working directory created",
+            extra={
+                "session_id": str(session.id),
+                "working_directory": str(workdir)
+            }
+        )
 
         # 4. Persist session (convert domain entity to model)
         from app.models.session import SessionModel
@@ -104,19 +123,64 @@ class SessionService:
         )
 
         await self.db.commit()
+        
+        logger.info(
+            f"Session created successfully",
+            extra={
+                "session_id": str(session.id),
+                "user_id": str(user_id),
+                "mode": mode.value,
+                "name": name,
+                "working_directory": session.working_directory_path
+            }
+        )
+        
         return session
 
     async def get_session(self, session_id: UUID, user_id: UUID) -> Session:
         """Get session by ID with authorization check."""
+        logger.debug(
+            f"Getting session",
+            extra={
+                "session_id": str(session_id),
+                "user_id": str(user_id)
+            }
+        )
+        
         session_model = await self.session_repo.get_by_id(session_id)
         if not session_model:
+            logger.warning(
+                f"Session not found",
+                extra={
+                    "session_id": str(session_id),
+                    "user_id": str(user_id)
+                }
+            )
             raise SessionNotFoundError(f"Session {session_id} not found")
 
         # Check authorization - simple ownership check
         # Admin users can access all sessions, regular users only their own
         user_model = await self.user_repo.get_by_id(user_id)
         if session_model.user_id != user_id and user_model.role != "admin":
+            logger.warning(
+                f"Unauthorized session access attempt",
+                extra={
+                    "session_id": str(session_id),
+                    "requesting_user_id": str(user_id),
+                    "session_owner_id": str(session_model.user_id),
+                    "user_role": user_model.role if user_model else "unknown"
+                }
+            )
             raise PermissionDeniedError("Not authorized to access this session")
+
+        logger.debug(
+            f"Session retrieved successfully",
+            extra={
+                "session_id": str(session_id),
+                "session_status": session_model.status,
+                "session_mode": session_model.mode
+            }
+        )
 
         # Convert model to domain entity
         return self._model_to_entity(session_model)
