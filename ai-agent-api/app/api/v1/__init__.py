@@ -14,6 +14,7 @@ from app.api.v1 import (
     mcp_import_export,
     admin,
     websocket,
+    monitoring,
 )
 
 
@@ -30,6 +31,7 @@ api_v1_router.include_router(mcp_servers.router)
 api_v1_router.include_router(mcp_import_export.router)
 api_v1_router.include_router(admin.router)
 api_v1_router.include_router(websocket.router)
+api_v1_router.include_router(monitoring.router)
 
 
 __all__ = ["api_v1_router"]

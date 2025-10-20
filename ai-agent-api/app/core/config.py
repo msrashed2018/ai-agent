@@ -43,8 +43,8 @@ class Settings(BaseSettings):
     # Security Configuration
     secret_key: str
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 60
-    jwt_refresh_token_expire_days: int = 7
+    jwt_access_token_expire_minutes: int = 360  # 6 hours
+    jwt_refresh_token_expire_days: int = 1  # 24 hours
     
     # Claude Configuration
     anthropic_api_key: str
