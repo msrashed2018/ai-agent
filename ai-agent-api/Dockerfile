@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
+COPY main.py .
 
 # Create data directories
 RUN mkdir -p /data/agent-workdirs/active \
@@ -40,4 +41,4 @@ ENV PYTHONPATH=/app
 EXPOSE 8000
 
 # Run database migrations and start application
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]

@@ -35,6 +35,72 @@ services:
     networks:
       - aiagent-dev-network
 
+  # Celery Worker (Development)
+  celery-worker:
+    image: python:3.12-slim
+    container_name: aiagent-celery-worker-dev
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir -q -r requirements.txt &&
+             celery -A app.celery_app worker --loglevel=info --queues=celery,task_execution,scheduled,monitoring"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aiagent:password@postgres:5432/aiagent_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SECRET_KEY: ${SECRET_KEY:-your_secret_key_here_minimum_32_characters_long}
+      PYTHONPATH: /app
+    volumes:
+      - ./app:/app/app
+      - ./main.py:/app/main.py
+      - ./requirements.txt:/app/requirements.txt
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./data:/data
+      - ./logs:/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aiagent-dev-network
+    restart: unless-stopped
+
+  # Celery Beat (Development)
+  celery-beat:
+    image: python:3.12-slim
+    container_name: aiagent-celery-beat-dev
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir -q -r requirements.txt &&
+             celery -A app.celery_app beat --loglevel=info"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aiagent:password@postgres:5432/aiagent_db
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SECRET_KEY: ${SECRET_KEY:-your_secret_key_here_minimum_32_characters_long}
+      PYTHONPATH: /app
+    volumes:
+      - ./app:/app/app
+      - ./main.py:/app/main.py
+      - ./requirements.txt:/app/requirements.txt
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./data:/data
+      - ./logs:/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aiagent-dev-network
+    restart: unless-stopped
+
 volumes:
   postgres_dev_data:
   redis_dev_data:

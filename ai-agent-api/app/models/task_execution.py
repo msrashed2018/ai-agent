@@ -27,7 +27,7 @@ class TaskExecutionModel(Base):
     # Variables injected into prompt template
     
     # Status
-    status = Column(String(50), nullable=False, default='pending', index=True)  # 'pending', 'running', 'completed', 'failed', 'cancelled'
+    status = Column(String(50), nullable=False, default='pending', index=True)  # 'pending', 'queued', 'running', 'completed', 'failed', 'cancelled'
     error_message = Column(String)
     
     # Results
@@ -37,9 +37,15 @@ class TaskExecutionModel(Base):
     total_messages = Column(Integer, default=0)
     total_tool_calls = Column(Integer, default=0)
     duration_seconds = Column(Integer)
-    
+
+    # Celery Integration Fields
+    celery_task_id = Column(String(255), index=True)  # Celery task ID for async execution
+    worker_hostname = Column(String(255))  # Worker that processed the task
+    retry_count = Column(Integer, default=0)  # Number of retry attempts
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, index=True)
+    queued_at = Column(DateTime(timezone=True))  # When queued to Celery
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     
@@ -51,9 +57,10 @@ class TaskExecutionModel(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint("trigger_type IN ('manual', 'scheduled', 'webhook', 'api')", name="chk_trigger_type"),
-        CheckConstraint("status IN ('pending', 'running', 'completed', 'failed', 'cancelled')", name="chk_task_execution_status"),
+        CheckConstraint("status IN ('pending', 'queued', 'running', 'completed', 'failed', 'cancelled')", name="chk_task_execution_status"),
         Index("idx_task_executions_task", "task_id", "created_at"),
         Index("idx_task_executions_session", "session_id"),
         Index("idx_task_executions_status", "status", "created_at"),
         Index("idx_task_executions_trigger", "trigger_type"),
+        Index("idx_task_executions_celery_task", "celery_task_id"),  # For lookup by Celery task ID
     )

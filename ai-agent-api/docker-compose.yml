@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database (Development)
   postgres:
@@ -59,7 +57,9 @@ services:
     networks:
       - aiagent-network
 
-  # API Service
+  # API Service (OPTIONAL - Run locally for Claude Code CLI access)
+  # NOTE: API should run locally, not in Docker, to access Claude Code subsystem
+  # Use 'make start' to run API locally with Docker infrastructure
   api:
     build:
       context: .
@@ -87,14 +87,17 @@ services:
     networks:
       - aiagent-network
     restart: unless-stopped
+    profiles:
+      - full-docker  # Only start with --profile full-docker
 
   # Celery Worker
   celery-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: python:3.12-slim
     container_name: aiagent-celery-worker
-    command: celery -A app.celery_app worker --loglevel=info
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir -q -r requirements.txt &&
+             celery -A app.celery_app worker --loglevel=info --queues=celery,task_execution,scheduled,monitoring"
     environment:
       DATABASE_URL: postgresql+asyncpg://aiagent:password@postgres:5432/aiagent_db
       REDIS_URL: redis://redis:6379/0
@@ -102,24 +105,32 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       SECRET_KEY: ${SECRET_KEY:-your_secret_key_here_minimum_32_characters_long}
+      PYTHONPATH: /app
     volumes:
+      - ./app:/app/app
+      - ./main.py:/app/main.py
+      - ./requirements.txt:/app/requirements.txt
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       - ./data:/data
       - ./logs:/logs
     depends_on:
-      - postgres
-      - redis
-      - api
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - aiagent-network
     restart: unless-stopped
 
   # Celery Beat (Scheduler)
   celery-beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: python:3.12-slim
     container_name: aiagent-celery-beat
-    command: celery -A app.celery_app beat --loglevel=info
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir -q -r requirements.txt &&
+             celery -A app.celery_app beat --loglevel=info"
     environment:
       DATABASE_URL: postgresql+asyncpg://aiagent:password@postgres:5432/aiagent_db
       REDIS_URL: redis://redis:6379/0
@@ -127,13 +138,20 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       SECRET_KEY: ${SECRET_KEY:-your_secret_key_here_minimum_32_characters_long}
+      PYTHONPATH: /app
     volumes:
+      - ./app:/app/app
+      - ./main.py:/app/main.py
+      - ./requirements.txt:/app/requirements.txt
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       - ./data:/data
       - ./logs:/logs
     depends_on:
-      - postgres
-      - redis
-      - api
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - aiagent-network
     restart: unless-stopped

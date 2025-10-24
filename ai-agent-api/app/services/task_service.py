@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.task import Task
+from app.domain.entities.task_execution import TaskExecution, TaskExecutionStatus, TriggerType
 from app.domain.exceptions import TaskNotFoundError, PermissionDeniedError, ValidationError
 from app.repositories.task_repository import TaskRepository
 from app.repositories.task_execution_repository import TaskExecutionRepository
@@ -140,39 +141,37 @@ class TaskService:
         task_id: str,
         trigger_type: str = "manual",
         variables: Optional[dict] = None,
+        execution_mode: str = "async",
     ):
         """Execute a task by creating a session and running the prompt template.
+
+        Supports both asynchronous (via Celery) and synchronous execution modes.
         
         Args:
             task_id: Task UUID
             trigger_type: "manual", "scheduled", or "webhook"
             variables: Variables to substitute in prompt template
-            
+            execution_mode: "async" (queue to Celery) or "sync" (block and wait)
+
         Returns:
             TaskExecution entity
-            
+
         Raises:
             TaskNotFoundError: Task doesn't exist
             PermissionDeniedError: User doesn't have access
             ValidationError: Task not ready for execution
         """
-        from app.domain.entities.task_execution import TaskExecution, TaskExecutionStatus, TriggerType
-        from app.services.sdk_session_service import SDKIntegratedSessionService
-        from app.services.storage_manager import StorageManager
-        from app.repositories.session_repository import SessionRepository
-        from app.repositories.message_repository import MessageRepository
-        from app.repositories.tool_call_repository import ToolCallRepository
-        from uuid import uuid4
         
         logger.info(
             "Starting task execution",
             extra={
                 "task_id": task_id,
                 "trigger_type": trigger_type,
+                "execution_mode": execution_mode,
                 "variables_provided": bool(variables)
             }
         )
-        
+
         # 1. Get and validate task
         task = await self.task_repo.get_by_id(task_id)
         if not task:
@@ -181,35 +180,137 @@ class TaskService:
                 extra={"task_id": task_id}
             )
             raise TaskNotFoundError(f"Task {task_id} not found")
-        
+
         if not task.is_active:
             raise ValidationError("Task is not active")
-        
+
         # 2. Create task execution record
         execution = TaskExecution(
             id=uuid4(),
             task_id=task.id,
-            user_id=task.user_id,
-            trigger_type=trigger_type,
-            variables=variables or {},
+            trigger_type=TriggerType(trigger_type),
             status=TaskExecutionStatus.PENDING,
         )
-        
+        execution.prompt_variables = variables or {}
+
         # Persist execution record
         from app.models.task_execution import TaskExecutionModel
         execution_model = TaskExecutionModel(
             id=execution.id,
             task_id=execution.task_id,
-            user_id=execution.user_id,
-            trigger_type=execution.trigger_type,
-            variables=execution.variables,
+            trigger_type=execution.trigger_type.value,
+            prompt_variables=execution.prompt_variables,
             status=execution.status.value,
-            started_at=execution.started_at,
         )
         self.db.add(execution_model)
         await self.db.flush()
         await self.db.commit()
-        
+
+        logger.info(
+            "Task execution record created",
+            extra={
+                "execution_id": str(execution.id),
+                "task_id": task_id,
+                "status": execution.status.value,
+            }
+        )
+
+        # 3. Execute based on mode
+        if execution_mode == "async":
+            return await self._execute_task_async(execution, task, variables or {})
+        else:
+            return await self._execute_task_sync(execution, task, variables or {})
+
+    async def _execute_task_async(
+        self,
+        execution: TaskExecution,
+        task,
+        variables: dict,
+    ) -> TaskExecution:
+        """Queue task for background execution via Celery.
+
+        Args:
+            execution: TaskExecution entity
+            task: Task entity
+            variables: Prompt template variables
+
+        Returns:
+            TaskExecution entity with status=QUEUED
+        """
+        from app.celery_tasks.task_execution import execute_task_async
+
+        logger.info(
+            "Queuing task for background execution",
+            extra={
+                "execution_id": str(execution.id),
+                "task_id": str(task.id),
+            }
+        )
+
+        # Queue Celery task
+        celery_task = execute_task_async.delay(
+            execution_id=str(execution.id),
+            task_id=str(task.id),
+            user_id=str(task.user_id),
+            variables=variables,
+        )
+
+        # Update execution status to QUEUED
+        execution.queue_execution(celery_task.id)
+
+        await self.task_execution_repo.update(
+            str(execution.id),
+            status=TaskExecutionStatus.QUEUED.value,
+            celery_task_id=celery_task.id,
+            queued_at=execution.queued_at,
+        )
+        await self.db.commit()
+
+        logger.info(
+            "Task queued successfully",
+            extra={
+                "execution_id": str(execution.id),
+                "celery_task_id": celery_task.id,
+                "status": "queued",
+            }
+        )
+
+        return execution
+
+    async def _execute_task_sync(
+        self,
+        execution: TaskExecution,
+        task,
+        variables: dict,
+    ) -> TaskExecution:
+        """Execute task synchronously (blocking).
+
+        This is the original synchronous implementation.
+        Used for backward compatibility and testing.
+
+        Args:
+            execution: TaskExecution entity
+            task: Task entity
+            variables: Prompt template variables
+
+        Returns:
+            TaskExecution entity with status=COMPLETED or FAILED
+        """
+        from app.services.sdk_session_service import SDKIntegratedSessionService
+        from app.services.storage_manager import StorageManager
+        from app.repositories.session_repository import SessionRepository
+        from app.repositories.message_repository import MessageRepository
+        from app.repositories.tool_call_repository import ToolCallRepository
+        from uuid import uuid4
+
+        logger.info(
+            "Executing task synchronously",
+            extra={
+                "execution_id": str(execution.id),
+                "task_id": str(task.id),
+            }
+        )
+
         try:
             # 3. Create session for task execution
             session_service = SDKIntegratedSessionService(
@@ -223,7 +324,7 @@ class TaskService:
             )
             
             # Build session name
-            session_name = f"Task: {task.name} ({trigger_type})"
+            session_name = f"Task: {task.name} ({execution.trigger_type.value})"
             
             # Use task's SDK options (already includes MCP config when session created)
             session = await session_service.create_session(
@@ -259,13 +360,16 @@ class TaskService:
             # 6. Mark execution as completed
             execution.status = TaskExecutionStatus.COMPLETED
             execution.completed_at = datetime.utcnow()
-            execution.result_message_id = message.id
-            
+            execution.result_data = {
+                "last_message_id": str(message.id),
+                "message_content": message.content[:500] if message.content else None,
+            }
+
             await self.task_execution_repo.update(
                 str(execution.id),
                 status=TaskExecutionStatus.COMPLETED.value,
                 completed_at=execution.completed_at,
-                result_message_id=message.id,
+                result_data=execution.result_data,
             )
             
             # 7. Generate report if requested
@@ -301,7 +405,7 @@ class TaskService:
                 task_id=task.id,
                 execution_id=execution.id,
                 user_id=task.user_id,
-                trigger_type=trigger_type,
+                trigger_type=execution.trigger_type.value,
                 status="completed",
             )
             
@@ -326,7 +430,7 @@ class TaskService:
                 task_id=task.id,
                 execution_id=execution.id,
                 user_id=task.user_id,
-                trigger_type=trigger_type,
+                trigger_type=execution.trigger_type.value,
                 status="failed",
                 error=str(e),
             )

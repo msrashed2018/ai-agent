@@ -90,7 +90,7 @@ class TaskExecutionResponse(BaseModel):
     id: UUID = Field(..., description="Execution UUID")
     task_id: UUID = Field(..., description="Task UUID")
     session_id: Optional[UUID] = Field(None, description="Session UUID")
-    status: str = Field(..., description="Execution status (pending/running/completed/failed)")
+    status: str = Field(..., description="Execution status (pending/queued/running/completed/failed/cancelled)")
     trigger_type: str = Field(..., description="Trigger type (manual/scheduled/api)")
     prompt_variables: Dict[str, Any] = Field(default_factory=dict, description="Used template variables")
     result_data: Optional[Dict[str, Any]] = Field(None, description="Execution result data")
