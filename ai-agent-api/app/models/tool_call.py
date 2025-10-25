@@ -49,7 +49,8 @@ class ToolCallModel(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    session = relationship("SessionModel", back_populates="tool_calls")
+    # session relationship removed (SessionModel being phased out)
+    # Session references available via session_id foreign key
     message = relationship("MessageModel")
     
     # Constraints

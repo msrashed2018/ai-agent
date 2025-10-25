@@ -28,115 +28,70 @@ export interface TokenResponse {
 export interface UserResponse {
   id: string;
   email: string;
-  role: 'admin' | 'user';
+  username?: string;
+  role: 'admin' | 'user' | 'viewer';
   is_active: boolean;
   created_at: string;
 }
 
-// ============================================================================
-// Session Types
-// ============================================================================
+// ===== Tool Call Types for Task Executions =====
 
-export interface SessionCreateRequest {
-  // Existing fields
-  template_id?: string | null;
-  name?: string | null;
-  description?: string | null;
-  model?: string;
-  working_directory?: string | null;
-  allowed_tools?: string[];
-  system_prompt?: string | null;
-  sdk_options?: Record<string, any> | null;
-  metadata?: Record<string, any> | null;
-  mcp_servers?: string[];
-
-  // Phase 4: Session mode
-  mode?: 'interactive' | 'background' | 'forked';
-
-  // Phase 4: Parent session (for forking)
-  parent_session_id?: string | null;
-  fork_at_message?: number | null;
-
-  // Phase 4: Streaming configuration
-  include_partial_messages?: boolean;
-
-  // Phase 4: Retry configuration
-  max_retries?: number;
-  retry_delay?: number;
-  timeout_seconds?: number;
-
-  // Phase 4: Hooks configuration
-  hooks_enabled?: string[];
-
-  // Phase 4: Permission configuration
-  permission_mode?: 'default' | 'acceptEdits' | 'bypassPermissions';
-  custom_policies?: string[];
-}
-
-export interface SessionResponse {
+export interface ToolCallResponse {
   id: string;
-  user_id: string;
-  name?: string | null;
-  description?: string | null;
-  status: 'active' | 'paused' | 'completed' | 'failed' | 'initializing';
-  working_directory: string;
-  allowed_tools: string[];
-  system_prompt?: string | null;
-  sdk_options: Record<string, any>;
-  parent_session_id?: string | null;
-  message_count: number;
-  tool_call_count: number;
-  total_cost_usd?: number | null;
-  created_at: string;
-  updated_at: string;
+  session_id?: string | null;
+  message_id?: string | null;
+  tool_name: string;
+  tool_use_id: string;
+  tool_input: Record<string, any>;
+  tool_output?: Record<string, any> | null;
+  status: 'pending' | 'running' | 'success' | 'error' | 'denied';
+  is_error: boolean;
+  error_message?: string | null;
+  permission_decision?: 'allow' | 'deny' | 'ask' | null;
+  permission_reason?: string | null;
+  started_at?: string | null;
   completed_at?: string | null;
+  duration_ms?: number | null;
+  created_at: string;
   _links?: Links;
-
-  // Phase 4: Additional fields
-  mode?: string;
-  is_fork: boolean;
-  fork_at_message?: number | null;
-  include_partial_messages?: boolean;
-  max_retries?: number;
-  retry_delay?: number;
-  timeout_seconds?: number;
-  hooks_enabled?: string[];
-  permission_mode?: string;
-  custom_policies?: string[];
-  total_hook_executions?: number;
-  total_permission_checks?: number;
-  total_errors?: number;
-  total_retries?: number;
-  archive_id?: string | null;
-  template_id?: string | null;
-  total_input_tokens?: number;
-  total_output_tokens?: number;
-  total_cache_creation_tokens?: number;
-  total_cache_read_tokens?: number;
 }
 
-export interface SessionListResponse {
-  items: SessionResponse[];
+export interface ToolCallListResponse {
+  items: ToolCallResponse[];
   total: number;
   page: number;
   page_size: number;
   total_pages: number;
 }
 
-export interface SessionQueryRequest {
-  message: string;
-  stream?: boolean;
+// ===== NEW: Execution Cancellation Types =====
+
+export interface ExecutionCancelRequest {
+  reason?: string | null;
 }
 
-export interface SessionQueryResponse {
-  session_id: string;
-  message_id: string;
-  response: string;
-  tool_calls?: ToolCallResponse[];
+// ===== NEW: Working Directory Types =====
+
+export interface WorkingDirectoryFileInfo {
+  path: string;
+  size: number;
+  modified_at: string;
 }
 
-export interface SessionResumeRequest {
-  resume_message?: string | null;
+export interface WorkingDirectoryManifest {
+  execution_id: string;
+  total_files: number;
+  total_size: number;
+  files: WorkingDirectoryFileInfo[];
+  _links?: Links;
+}
+
+export interface ArchiveResponse {
+  execution_id: string;
+  archive_path: string;
+  archive_size: number;
+  created_at: string;
+  _links?: Links;
 }
 
 // ============================================================================
@@ -151,17 +106,50 @@ export interface MessageResponse {
   created_at: string;
 }
 
-export interface ToolCallResponse {
+// ============================================================================
+// Task Types
+// ============================================================================
+
+// ============================================================================
+// Tool Group Types
+// ============================================================================
+
+export interface ToolGroupCreateRequest {
+  name: string;
+  description?: string | null;
+  allowed_tools?: string[];
+  disallowed_tools?: string[];
+}
+
+export interface ToolGroupUpdateRequest {
+  name?: string;
+  description?: string | null;
+  allowed_tools?: string[];
+  disallowed_tools?: string[];
+}
+
+export interface ToolGroupResponse {
   id: string;
-  session_id: string;
-  message_id: string;
-  tool_name: string;
-  tool_input: Record<string, any>;
-  tool_output?: Record<string, any> | null;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  error_message?: string | null;
+  user_id: string;
+  name: string;
+  description?: string | null;
+  allowed_tools: string[];
+  disallowed_tools: string[];
+  is_public: boolean;
+  is_active: boolean;
+  is_deleted: boolean;
   created_at: string;
-  completed_at?: string | null;
+  updated_at: string;
+  deleted_at?: string | null;
+  _links?: Links;
+}
+
+export interface ToolGroupListResponse {
+  items: ToolGroupResponse[];
+  total: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
 }
 
 // ============================================================================
@@ -173,6 +161,9 @@ export interface TaskCreateRequest {
   description?: string | null;
   prompt_template: string;
   template_variables?: Record<string, any>;
+  tool_group_id?: string | null;
+  allowed_tools?: string[];
+  disallowed_tools?: string[];
   is_scheduled?: boolean;
   schedule_cron?: string | null;
   schedule_enabled?: boolean;
@@ -186,6 +177,9 @@ export interface TaskUpdateRequest {
   description?: string | null;
   prompt_template?: string;
   template_variables?: Record<string, any>;
+  tool_group_id?: string | null;
+  allowed_tools?: string[];
+  disallowed_tools?: string[];
   is_scheduled?: boolean;
   schedule_cron?: string | null;
   schedule_enabled?: boolean;
@@ -197,9 +191,12 @@ export interface TaskUpdateRequest {
 export interface TaskResponse {
   id: string;
   user_id: string;
+  tool_group_id?: string | null;
   name: string;
   description?: string | null;
   prompt_template: string;
+  allowed_tools: string[];
+  disallowed_tools: string[];
   template_variables: Record<string, any>;
   is_scheduled: boolean;
   schedule_cron?: string | null;
@@ -457,14 +454,6 @@ export interface SystemStatsResponse {
   };
 }
 
-export interface AdminSessionListResponse {
-  items: SessionResponse[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
-
 export interface AdminUserResponse {
   id: string;
   email: string;
@@ -483,82 +472,6 @@ export interface AdminUserListResponse {
   page: number;
   page_size: number;
   total_pages: number;
-}
-
-// ============================================================================
-// Session Template Types
-// ============================================================================
-
-export interface SessionTemplateCreateRequest {
-  name: string;
-  description?: string | null;
-  category?: string | null;
-  system_prompt?: string | null;
-  working_directory?: string | null;
-  allowed_tools?: string[] | null;
-  sdk_options?: Record<string, any> | null;
-  mcp_server_ids?: string[] | null;
-  is_public?: boolean;
-  is_organization_shared?: boolean;
-  tags?: string[] | null;
-  template_metadata?: Record<string, any> | null;
-}
-
-export interface SessionTemplateUpdateRequest {
-  name?: string | null;
-  description?: string | null;
-  category?: string | null;
-  system_prompt?: string | null;
-  working_directory?: string | null;
-  allowed_tools?: string[] | null;
-  sdk_options?: Record<string, any> | null;
-  mcp_server_ids?: string[] | null;
-  tags?: string[] | null;
-  template_metadata?: Record<string, any> | null;
-}
-
-export interface SessionTemplateSharingUpdateRequest {
-  is_public?: boolean | null;
-  is_organization_shared?: boolean | null;
-}
-
-export interface SessionTemplateResponse {
-  id: string;
-  user_id: string;
-  name: string;
-  description?: string | null;
-  category?: string | null;
-  system_prompt?: string | null;
-  working_directory?: string | null;
-  allowed_tools: string[];
-  sdk_options: Record<string, any>;
-  mcp_server_ids: string[];
-  is_public: boolean;
-  is_organization_shared: boolean;
-  version: string;
-  tags: string[];
-  template_metadata: Record<string, any>;
-  usage_count: number;
-  last_used_at?: string | null;
-  created_at: string;
-  updated_at: string;
-  _links?: Links;
-}
-
-export interface SessionTemplateListResponse {
-  items: SessionTemplateResponse[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
-
-export interface SessionTemplateSearchRequest {
-  search_term?: string | null;
-  category?: string | null;
-  tags?: string[] | null;
-  page?: number;
-  page_size?: number;
 }
 
 // ============================================================================
@@ -583,16 +496,100 @@ export interface APIError {
 // Utility Types
 // ============================================================================
 
-export type SessionStatus = 'active' | 'paused' | 'completed' | 'failed' | 'initializing';
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type ReportFormat = 'html' | 'pdf' | 'json' | 'markdown';
 export type MCPServerType = 'stdio' | 'sse' | 'http';
 export type HealthStatus = 'healthy' | 'unhealthy' | 'unknown';
-export type SessionMode = 'interactive' | 'background' | 'forked';
-export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
 export type ArchiveStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 export type PermissionDecision = 'allow' | 'deny';
 export type HookType = 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Stop' | 'SubagentStop' | 'PreCompact';
+
+// ============================================================================
+// Task Template Types
+// ============================================================================
+
+export interface TaskTemplateResponse {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  icon?: string;
+  prompt_template: string;
+  template_variables_schema?: Record<string, any>;
+  tool_group_id?: string | null;
+  allowed_tools: string[];
+  disallowed_tools: string[];
+  sdk_options: Record<string, any>;
+  generate_report: boolean;
+  report_format?: string;
+  tags: string[];
+  is_public: boolean;
+  is_active: boolean;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+  _links?: Links;
+}
+
+export interface TaskTemplateListResponse {
+  items: TaskTemplateResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface TaskTemplateCreateRequest {
+  name: string;
+  description?: string;
+  category?: string;
+  icon?: string;
+  prompt_template: string;
+  template_variables_schema?: Record<string, any>;
+  tool_group_id?: string | null;
+  allowed_tools?: string[];
+  disallowed_tools?: string[];
+  sdk_options?: Record<string, any>;
+  generate_report?: boolean;
+  report_format?: string;
+  tags?: string[];
+  is_public?: boolean;
+  is_active?: boolean;
+}
+
+export interface TaskTemplateUpdateRequest {
+  name?: string;
+  description?: string;
+  category?: string;
+  icon?: string;
+  prompt_template?: string;
+  template_variables_schema?: Record<string, any>;
+  tool_group_id?: string | null;
+  allowed_tools?: string[];
+  disallowed_tools?: string[];
+  sdk_options?: Record<string, any>;
+  generate_report?: boolean;
+  report_format?: string;
+  tags?: string[];
+  is_public?: boolean;
+  is_active?: boolean;
+}
+
+export interface TaskTemplateStatsResponse {
+  total_templates: number;
+  active_templates: number;
+  categories: Record<string, number>;
+  most_used: TaskTemplateResponse[];
+}
+
+export interface CreateTaskFromTemplateRequest {
+  name?: string;
+  description?: string;
+  tags?: string[];
+  is_scheduled?: boolean;
+  schedule_cron?: string;
+  schedule_enabled?: boolean;
+}
 
 // ============================================================================
 // Admin Types

@@ -15,9 +15,11 @@ class Task:
         prompt_template: str,
         allowed_tools: List[str],
         sdk_options: dict,
+        tool_group_id: Optional[UUID] = None,
     ):
         self.id = id
         self.user_id = user_id
+        self.tool_group_id = tool_group_id
         self.name = name
         self.description: Optional[str] = None
         self.prompt_template = prompt_template

@@ -52,7 +52,8 @@ class SessionMetricsSnapshotModel(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, index=True)
 
     # Relationships
-    session = relationship("SessionModel", back_populates="metrics_snapshots")
+    # session relationship removed (SessionModel being phased out)
+    # Session references available via session_id foreign key
 
     # Indexes for common queries
     __table_args__ = (

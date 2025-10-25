@@ -38,7 +38,8 @@ class MessageModel(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, index=True)
     
     # Relationships
-    session = relationship("SessionModel", back_populates="messages")
+    # session relationship removed (SessionModel being phased out)
+    # Messages can still reference sessions via session_id foreign key
     
     # Constraints
     __table_args__ = (

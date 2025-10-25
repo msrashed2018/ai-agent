@@ -79,12 +79,11 @@ class UserModel(Base):
     
     # Relationships
     organization = relationship("OrganizationModel", back_populates="users")
-    sessions = relationship("SessionModel", back_populates="user")
     tasks = relationship("TaskModel", back_populates="user")
     reports = relationship("ReportModel", back_populates="user")
     mcp_servers = relationship("MCPServerModel", back_populates="user")
     hooks = relationship("HookModel", back_populates="user")
-    session_templates = relationship("SessionTemplateModel", back_populates="user")
+    tool_groups = relationship("ToolGroupModel", back_populates="user")
     
     # Constraints
     __table_args__ = (

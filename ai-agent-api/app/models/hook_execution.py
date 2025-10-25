@@ -37,7 +37,8 @@ class HookExecutionModel(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, index=True)
 
     # Relationships
-    session = relationship("SessionModel", back_populates="hook_executions")
+    # session relationship removed (SessionModel being phased out)
+    # Session references available via session_id foreign key
     tool_call = relationship("ToolCallModel")
 
     # Indexes for common queries

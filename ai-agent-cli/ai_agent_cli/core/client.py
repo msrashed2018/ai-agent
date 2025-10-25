@@ -244,6 +244,84 @@ class APIClient:
         """Get task execution."""
         return self.get(f"/api/v1/tasks/executions/{execution_id}")
 
+    def retry_task_execution(self, execution_id: str) -> Dict[str, Any]:
+        """Retry a failed task execution.
+
+        Can retry executions with status: pending, queued, or failed.
+        """
+        return self.post(f"/api/v1/task-executions/{execution_id}/retry", {})
+
+    # ===== NEW ENDPOINTS: Tool Calls, Cancellation, Working Directory =====
+
+    def get_execution_tool_calls(self, execution_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Get tool calls for task execution."""
+        return self.get(f"/api/v1/tasks/executions/{execution_id}/tool-calls", params)
+
+    def cancel_task_execution(self, execution_id: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Cancel a running task execution."""
+        return self.post(f"/api/v1/tasks/executions/{execution_id}/cancel", data or {})
+
+    def get_execution_files(self, execution_id: str) -> Dict[str, Any]:
+        """Get file manifest for task execution's working directory."""
+        return self.get(f"/api/v1/tasks/executions/{execution_id}/files")
+
+    def download_execution_file(self, execution_id: str, file_path: str) -> bytes:
+        """Download a specific file from task execution's working directory."""
+        url = f"{self.base_url}/api/v1/tasks/executions/{execution_id}/files/download"
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.get(url, headers=self._get_headers(), params={"file_path": file_path})
+            if response.status_code >= 400:
+                self._handle_response(response)
+            return response.content
+
+    def archive_execution_directory(self, execution_id: str) -> Dict[str, Any]:
+        """Archive task execution's working directory to tar.gz."""
+        return self.post(f"/api/v1/tasks/executions/{execution_id}/archive", {})
+
+    def download_archive(self, execution_id: str) -> bytes:
+        """Download archived working directory as tar.gz."""
+        url = f"{self.base_url}/api/v1/tasks/archives/{execution_id}/download"
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.get(url, headers=self._get_headers())
+            if response.status_code >= 400:
+                self._handle_response(response)
+            return response.content
+
+    # Task Template endpoints
+    def list_task_templates(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """List task templates."""
+        return self.get("/api/v1/task-templates", params)
+
+    def get_task_template(self, template_id: str) -> Dict[str, Any]:
+        """Get task template by ID."""
+        return self.get(f"/api/v1/task-templates/{template_id}")
+
+    def create_task_template(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new task template."""
+        return self.post("/api/v1/task-templates", data)
+
+    def update_task_template(self, template_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update task template."""
+        return self.patch(f"/api/v1/task-templates/{template_id}", data)
+
+    def delete_task_template(self, template_id: str) -> None:
+        """Delete task template."""
+        return self.delete(f"/api/v1/task-templates/{template_id}")
+
+    def create_task_from_template(
+        self, template_id: str, data: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Create a task from template."""
+        return self.post(f"/api/v1/task-templates/{template_id}/create-task", data or {})
+
+    def get_task_template_stats(self) -> Dict[str, Any]:
+        """Get task template statistics."""
+        return self.get("/api/v1/task-templates/stats")
+
+    def get_templates_by_category(self, category: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Get task templates by category."""
+        return self.get(f"/api/v1/task-templates/category/{category}", params)
+
     # Report endpoints
     def get_report(self, report_id: str) -> Dict[str, Any]:
         """Get report by ID."""
@@ -299,6 +377,43 @@ class APIClient:
     def get_mcp_templates(self) -> Dict[str, Any]:
         """Get MCP server templates."""
         return self.get("/api/v1/mcp-servers/templates")
+
+    # Tool Group endpoints
+    def list_tool_groups(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """List tool groups."""
+        return self.get("/api/v1/tool-groups", params)
+
+    def create_tool_group(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new tool group."""
+        return self.post("/api/v1/tool-groups", data)
+
+    def get_tool_group(self, tool_group_id: str) -> Dict[str, Any]:
+        """Get tool group by ID."""
+        return self.get(f"/api/v1/tool-groups/{tool_group_id}")
+
+    def update_tool_group(self, tool_group_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update tool group."""
+        return self.patch(f"/api/v1/tool-groups/{tool_group_id}", data)
+
+    def delete_tool_group(self, tool_group_id: str) -> None:
+        """Delete tool group."""
+        return self.delete(f"/api/v1/tool-groups/{tool_group_id}")
+
+    def add_allowed_tool(self, tool_group_id: str, tool: str) -> Dict[str, Any]:
+        """Add tool to allowed list."""
+        return self.post(f"/api/v1/tool-groups/{tool_group_id}/allowed-tools", {"tool": tool})
+
+    def remove_allowed_tool(self, tool_group_id: str, tool: str) -> Dict[str, Any]:
+        """Remove tool from allowed list."""
+        return self.delete(f"/api/v1/tool-groups/{tool_group_id}/allowed-tools/{tool}")
+
+    def add_disallowed_tool(self, tool_group_id: str, tool: str) -> Dict[str, Any]:
+        """Add tool to disallowed list."""
+        return self.post(f"/api/v1/tool-groups/{tool_group_id}/disallowed-tools", {"tool": tool})
+
+    def remove_disallowed_tool(self, tool_group_id: str, tool: str) -> Dict[str, Any]:
+        """Remove tool from disallowed list."""
+        return self.delete(f"/api/v1/tool-groups/{tool_group_id}/disallowed-tools/{tool}")
 
     # Session Template endpoints
     def list_session_templates(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

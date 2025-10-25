@@ -47,7 +47,8 @@ class ReportModel(Base):
     deleted_at = Column(DateTime(timezone=True))
     
     # Relationships
-    session = relationship("SessionModel", back_populates="reports")
+    # session relationship removed (SessionModel being phased out)
+    # Session references available via session_id foreign key
     task_execution = relationship("TaskExecutionModel", foreign_keys=[task_execution_id], back_populates="report")
     user = relationship("UserModel", back_populates="reports")
     

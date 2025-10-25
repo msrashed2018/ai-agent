@@ -51,7 +51,8 @@ class TaskExecutionModel(Base):
     
     # Relationships
     task = relationship("TaskModel", back_populates="task_executions")
-    session = relationship("SessionModel", back_populates="task_executions")
+    # session relationship removed (SessionModel being phased out)
+    # Session references available via session_id foreign key
     report = relationship("ReportModel", foreign_keys="[ReportModel.task_execution_id]", back_populates="task_execution")
     
     # Constraints

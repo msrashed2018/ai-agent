@@ -6,7 +6,7 @@ from ai_agent_cli.core.exceptions import CLIError
 from ai_agent_cli.utils.output import console, print_error
 
 # Import command groups
-from ai_agent_cli.commands import auth, tasks, reports, mcp, admin, config, monitoring
+from ai_agent_cli.commands import auth, tasks, task_templates, reports, mcp, admin, config, monitoring, tool_groups
 # from ai_agent_cli.commands import sessions, session_templates  # REMOVED: Using tasks API only
 
 
@@ -28,11 +28,13 @@ cli.add_command(auth.auth)
 # cli.add_command(sessions.sessions)  # REMOVED: Using tasks API only
 # cli.add_command(session_templates.session_templates)  # REMOVED: Using tasks API only
 cli.add_command(tasks.tasks)
+cli.add_command(task_templates.task_templates)
 cli.add_command(reports.reports)
 cli.add_command(mcp.mcp)
 cli.add_command(admin.admin)
 cli.add_command(config.config)
 cli.add_command(monitoring.monitoring)
+cli.add_command(tool_groups.tool_groups)
 
 
 def main():

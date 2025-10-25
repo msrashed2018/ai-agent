@@ -10,6 +10,8 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TemplateEditor } from './template-editor';
 import { VariableEditor } from './variable-editor';
+import { ToolGroupSelector } from '@/components/tool-groups';
+import { useToolGroups } from '@/hooks/use-tool-groups';
 import { validateCron } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
@@ -18,6 +20,7 @@ const taskSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255, 'Name is too long'),
   description: z.string().optional(),
   prompt_template: z.string().min(1, 'Prompt template is required'),
+  tool_group_id: z.string().optional(),
   template_variables: z.record(z.any()).optional(),
   is_scheduled: z.boolean().default(false),
   schedule_cron: z.string().optional(),
@@ -46,6 +49,8 @@ interface TaskFormProps {
 
 export function TaskForm({ task, onSubmit, isSubmitting, submitLabel = 'Create Task' }: TaskFormProps) {
   const [tagInput, setTagInput] = useState('');
+  const { data: toolGroupsData, isLoading: isLoadingToolGroups } = useToolGroups();
+  const toolGroups = toolGroupsData?.items || [];
 
   const {
     register,
@@ -59,6 +64,7 @@ export function TaskForm({ task, onSubmit, isSubmitting, submitLabel = 'Create T
       name: task.name,
       description: task.description || '',
       prompt_template: task.prompt_template,
+      tool_group_id: task.tool_group_id || '',
       template_variables: task.template_variables,
       is_scheduled: task.is_scheduled,
       schedule_cron: task.schedule_cron || '',
@@ -70,6 +76,7 @@ export function TaskForm({ task, onSubmit, isSubmitting, submitLabel = 'Create T
       name: '',
       description: '',
       prompt_template: '',
+      tool_group_id: '',
       template_variables: {},
       is_scheduled: false,
       schedule_cron: '',
@@ -161,6 +168,15 @@ export function TaskForm({ task, onSubmit, isSubmitting, submitLabel = 'Create T
             </div>
           )}
         </div>
+
+        <div className="space-y-2">
+          <ToolGroupSelector
+            toolGroups={toolGroups}
+            value={watch('tool_group_id')}
+            onChange={(value) => setValue('tool_group_id', value)}
+            isLoading={isLoadingToolGroups}
+          />
+        </div>
       </div>
 
       {/* Prompt Template */}
@@ -246,7 +262,7 @@ export function TaskForm({ task, onSubmit, isSubmitting, submitLabel = 'Create T
           <div className="space-y-2 pl-6 border-l-2 border-gray-200">
             <Label htmlFor="report_format">Report Format</Label>
             <Select
-              value={watch('report_format')}
+              value={watch('report_format') || 'html'}
               onValueChange={(value) => setValue('report_format', value as any)}
             >
               <SelectTrigger id="report_format">

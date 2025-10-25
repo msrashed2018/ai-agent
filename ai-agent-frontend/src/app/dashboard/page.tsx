@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth-store';
 import { StatCard } from '@/components/dashboard/stat-card';
-import { RecentSessionsTable } from '@/components/dashboard/recent-sessions-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, CheckCircle2, DollarSign, FileText, PlayCircle, Plus } from 'lucide-react';
@@ -14,26 +13,15 @@ import { formatCurrency } from '@/lib/utils';
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
 
-  const { data: sessions, isLoading: sessionsLoading } = useQuery({
-    queryKey: ['sessions'],
-    queryFn: () => apiClient.listSessions({ page: 1, page_size: 100 }),
-  });
-
   const { data: tasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: () => apiClient.listTasks({ page: 1, page_size: 100 }),
   });
 
   // Calculate stats
-  const totalSessions = sessions?.total || 0;
   const totalTasks = tasks?.total || 0;
-  const activeSessions =
-    sessions?.items.filter((s) => s.status === 'active' || s.status === 'initializing').length || 0;
-  const totalCost =
-    sessions?.items.reduce((acc, s) => acc + (s.total_cost_usd || 0), 0) || 0;
-
-  // Get recent sessions (last 5)
-  const recentSessions = sessions?.items.slice(0, 5) || [];
+  const scheduledTasks = tasks?.items.filter((t) => t.is_scheduled && t.schedule_enabled).length || 0;
+  const tasksWithExecutions = tasks?.items.filter((t) => t.execution_count > 0).length || 0;
 
   return (
     <div className="space-y-6">
@@ -44,9 +32,9 @@ export default function DashboardPage() {
           <p className="text-muted-foreground mt-1">Welcome back, {user?.email}</p>
         </div>
         <Button asChild>
-          <Link href="/sessions/new">
+          <Link href="/tasks/new">
             <Plus className="mr-2 h-4 w-4" />
-            New Session
+            New Task
           </Link>
         </Button>
       </div>
@@ -54,131 +42,94 @@ export default function DashboardPage() {
       {/* Main Content */}
       <div className="space-y-6">
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard
-            title="Total Sessions"
-            value={totalSessions}
-            icon={Activity}
-            loading={sessionsLoading}
-            subtitle="All time"
-          />
-          <StatCard
-            title="Active Sessions"
-            value={activeSessions}
-            icon={PlayCircle}
-            loading={sessionsLoading}
-            subtitle="Currently running"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <StatCard
             title="Total Tasks"
             value={totalTasks}
             icon={FileText}
             loading={tasksLoading}
-            subtitle="Task templates"
+            subtitle="All task templates"
           />
           <StatCard
-            title="Total Cost"
-            value={formatCurrency(totalCost)}
-            icon={DollarSign}
-            loading={sessionsLoading}
-            subtitle="All sessions"
+            title="Executed Tasks"
+            value={tasksWithExecutions}
+            icon={Activity}
+            loading={tasksLoading}
+            subtitle="Tasks with executions"
+          />
+          <StatCard
+            title="Scheduled Tasks"
+            value={scheduledTasks}
+            icon={CheckCircle2}
+            loading={tasksLoading}
+            subtitle="Automated execution"
           />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent Sessions */}
+          {/* Quick Actions */}
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Recent Sessions</CardTitle>
-                    <CardDescription>Your latest Claude Code sessions</CardDescription>
-                  </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/sessions">View All</Link>
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <RecentSessionsTable sessions={recentSessions} loading={sessionsLoading} />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Quick Actions */}
-          <div>
-            <Card>
-              <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>Common tasks and shortcuts</CardDescription>
+                <CardDescription>Common tasks and operations</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Button className="w-full justify-start" variant="outline" asChild>
-                  <Link href="/sessions/new">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create New Session
-                  </Link>
-                </Button>
-                <Button className="w-full justify-start" variant="outline" asChild>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button asChild variant="outline" className="h-20 flex-col gap-2">
                   <Link href="/tasks/new">
-                    <FileText className="mr-2 h-4 w-4" />
-                    Create New Task
+                    <Plus className="h-5 w-5" />
+                    <span>Create New Task</span>
                   </Link>
                 </Button>
-                <Button className="w-full justify-start" variant="outline" asChild>
-                  <Link href="/sessions">
-                    <Activity className="mr-2 h-4 w-4" />
-                    View All Sessions
-                  </Link>
-                </Button>
-                <Button className="w-full justify-start" variant="outline" asChild>
+                <Button asChild variant="outline" className="h-20 flex-col gap-2">
                   <Link href="/tasks">
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    View All Tasks
+                    <FileText className="h-5 w-5" />
+                    <span>View All Tasks</span>
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="h-20 flex-col gap-2">
+                  <Link href="/reports">
+                    <Activity className="h-5 w-5" />
+                    <span>View Reports</span>
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="h-20 flex-col gap-2">
+                  <Link href="/mcp-servers">
+                    <PlayCircle className="h-5 w-5" />
+                    <span>MCP Servers</span>
                   </Link>
                 </Button>
               </CardContent>
             </Card>
-
-            {/* Session Stats */}
-            {sessions && sessions.items.length > 0 && (
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Session Statistics</CardTitle>
-                  <CardDescription>Breakdown by status</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {['active', 'completed', 'failed', 'paused'].map((status) => {
-                    const count = sessions.items.filter((s) => s.status === status).length;
-                    const percentage = totalSessions > 0 ? (count / totalSessions) * 100 : 0;
-                    return (
-                      <div key={status} className="flex items-center justify-between text-sm">
-                        <span className="capitalize text-gray-600">{status}</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full ${
-                                status === 'active'
-                                  ? 'bg-green-600'
-                                  : status === 'completed'
-                                  ? 'bg-blue-600'
-                                  : status === 'failed'
-                                  ? 'bg-red-600'
-                                  : 'bg-yellow-600'
-                              }`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                          <span className="font-medium w-8 text-right">{count}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            )}
           </div>
+
+          {/* Getting Started */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Getting Started</CardTitle>
+              <CardDescription>New to the AI Agent platform?</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-semibold mb-2">1. Create a Task</h4>
+                <p className="text-sm text-muted-foreground">
+                  Define reusable task templates with prompts and automation
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">2. Execute Tasks</h4>
+                <p className="text-sm text-muted-foreground">
+                  Run tasks manually or schedule them for automation
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">3. View Reports</h4>
+                <p className="text-sm text-muted-foreground">
+                  Review generated reports and execution results
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

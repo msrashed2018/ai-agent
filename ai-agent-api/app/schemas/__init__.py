@@ -49,9 +49,14 @@ from app.schemas.mcp import (
     MCPServerResponse,
     MCPServerListResponse,
 )
+from app.schemas.tool_group import (
+    ToolGroupCreateRequest,
+    ToolGroupUpdateRequest,
+    ToolGroupResponse,
+    ToolGroupListResponse,
+)
 from app.schemas.admin import (
     SystemStatsResponse,
-    AdminSessionListResponse,
 )
 
 __all__ = [
@@ -95,7 +100,11 @@ __all__ = [
     "MCPServerUpdateRequest",
     "MCPServerResponse",
     "MCPServerListResponse",
+    # Tool Groups
+    "ToolGroupCreateRequest",
+    "ToolGroupUpdateRequest",
+    "ToolGroupResponse",
+    "ToolGroupListResponse",
     # Admin
     "SystemStatsResponse",
-    "AdminSessionListResponse",
 ]

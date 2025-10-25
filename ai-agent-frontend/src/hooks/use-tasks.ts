@@ -9,6 +9,10 @@ import type {
   TaskExecutionResponse,
   TaskExecutionListResponse,
   PaginationParams,
+  ExecutionCancelRequest,
+  ToolCallListResponse,
+  WorkingDirectoryManifest,
+  ArchiveResponse,
 } from '@/types/api';
 import { toast } from 'sonner';
 
@@ -17,6 +21,8 @@ const TASKS_QUERY_KEY = 'tasks';
 const TASK_QUERY_KEY = 'task';
 const TASK_EXECUTIONS_QUERY_KEY = 'task-executions';
 const TASK_EXECUTION_QUERY_KEY = 'task-execution';
+const EXECUTION_TOOL_CALLS_QUERY_KEY = 'execution-tool-calls';
+const EXECUTION_FILES_QUERY_KEY = 'execution-files';
 
 interface UseTasksParams extends PaginationParams {
   tags?: string[];
@@ -136,6 +142,97 @@ export function useTaskExecution(executionId: string | undefined) {
         return 2000; // Poll every 2 seconds
       }
       return false;
+    },
+  });
+}
+
+// ============================================================================
+// Execution Mutations - Retry, Cancel, Files, Archive
+// ============================================================================
+
+export function useRetryExecution() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (executionId: string) => apiClient.retryTaskExecution(executionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TASK_EXECUTION_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [TASK_EXECUTIONS_QUERY_KEY] });
+      toast.success('Execution retried successfully');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to retry execution';
+      toast.error(message);
+    },
+  });
+}
+
+export function useCancelExecution() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ executionId, data }: { executionId: string; data?: ExecutionCancelRequest }) =>
+      apiClient.cancelExecution(executionId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [TASK_EXECUTION_QUERY_KEY] });
+      toast.success('Execution cancelled successfully');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to cancel execution';
+      toast.error(message);
+    },
+  });
+}
+
+export function useExecutionToolCalls(executionId: string | undefined, params?: PaginationParams) {
+  return useQuery({
+    queryKey: [EXECUTION_TOOL_CALLS_QUERY_KEY, executionId, params],
+    queryFn: () => apiClient.getExecutionToolCalls(executionId!, params),
+    enabled: !!executionId,
+  });
+}
+
+export function useExecutionFiles(executionId: string | undefined) {
+  return useQuery({
+    queryKey: [EXECUTION_FILES_QUERY_KEY, executionId],
+    queryFn: () => apiClient.getExecutionFiles(executionId!),
+    enabled: !!executionId,
+  });
+}
+
+export function useDownloadExecutionFile() {
+  return useMutation({
+    mutationFn: ({ executionId, filePath }: { executionId: string; filePath: string }) =>
+      apiClient.downloadExecutionFile(executionId, filePath),
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to download file';
+      toast.error(message);
+    },
+  });
+}
+
+export function useArchiveExecution() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (executionId: string) => apiClient.archiveExecutionDirectory(executionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [EXECUTION_FILES_QUERY_KEY] });
+      toast.success('Execution directory archived successfully');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to archive directory';
+      toast.error(message);
+    },
+  });
+}
+
+export function useDownloadArchive() {
+  return useMutation({
+    mutationFn: (executionId: string) => apiClient.downloadArchive(executionId),
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Failed to download archive';
+      toast.error(message);
     },
   });
 }

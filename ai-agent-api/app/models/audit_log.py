@@ -44,7 +44,8 @@ class AuditLogModel(Base):
     
     # Relationships
     user = relationship("UserModel")
-    session = relationship("SessionModel", back_populates="audit_logs")
+    # session relationship removed (SessionModel being phased out)
+    # Session references available via session_id foreign key
     
     # Constraints
     __table_args__ = (

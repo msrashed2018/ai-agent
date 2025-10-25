@@ -16,7 +16,8 @@ class TaskModel(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    
+    tool_group_id = Column(UUID(as_uuid=True), ForeignKey("tool_groups.id", ondelete="SET NULL"), nullable=True)
+
     # Basic Information
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text)
@@ -60,6 +61,7 @@ class TaskModel(Base):
     
     # Relationships
     user = relationship("UserModel", back_populates="tasks")
+    tool_group = relationship("ToolGroupModel", back_populates="tasks")
     task_executions = relationship("TaskExecutionModel", back_populates="task", cascade="all, delete-orphan")
     
     # Indexes

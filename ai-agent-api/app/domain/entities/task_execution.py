@@ -6,9 +6,13 @@ from uuid import UUID
 
 
 class TaskExecutionStatus(Enum):
-    """Task execution status enumeration."""
-    PENDING = "pending"      # Created, not yet queued
-    QUEUED = "queued"        # Queued to Celery, waiting for worker
+    """Task execution status enumeration.
+
+    Note: QUEUED status is maintained for backward compatibility with existing data,
+    but is no longer used in new executions which go directly from PENDING to RUNNING.
+    """
+    PENDING = "pending"      # Created, not yet scheduled
+    QUEUED = "queued"        # DEPRECATED: Previously used for Celery queue, kept for data compatibility
     RUNNING = "running"      # Currently executing
     COMPLETED = "completed"  # Finished successfully
     FAILED = "failed"        # Failed with error
@@ -57,22 +61,27 @@ class TaskExecution:
         self.total_tool_calls = 0
         self.duration_seconds: Optional[int] = None
 
-        # Celery Integration Fields
-        self.celery_task_id: Optional[str] = None  # Celery task ID for async execution
-        self.worker_hostname: Optional[str] = None  # Worker that processed the task
-        self.retry_count: int = 0  # Number of retry attempts
+        # DEPRECATED: Celery Integration Fields (kept for backward compatibility)
+        # These fields are no longer used as we've migrated to native asyncio execution
+        self.celery_task_id: Optional[str] = None  # DEPRECATED: Was Celery task ID
+        self.worker_hostname: Optional[str] = None  # DEPRECATED: Was worker hostname
+        self.retry_count: int = 0  # Number of retry attempts (now used for async retries)
 
         # Timestamps
         self.created_at = datetime.utcnow()
-        self.queued_at: Optional[datetime] = None  # When queued to Celery
+        self.queued_at: Optional[datetime] = None  # DEPRECATED: Was when queued to Celery
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
 
     def queue_execution(self, celery_task_id: str) -> None:
-        """Mark execution as queued to Celery.
+        """DEPRECATED: Mark execution as queued to Celery.
+
+        This method is kept for backward compatibility but is no longer used
+        as we've migrated to native asyncio execution. Tasks now go directly
+        from PENDING to RUNNING status.
 
         Args:
-            celery_task_id: Celery task ID for tracking
+            celery_task_id: DEPRECATED: Was Celery task ID for tracking
 
         Raises:
             ValueError: If execution is not in PENDING status
@@ -159,10 +168,13 @@ class TaskExecution:
         self.report_id = report_id
 
     def set_worker_info(self, worker_hostname: str) -> None:
-        """Set worker information for Celery execution.
+        """DEPRECATED: Set worker information for Celery execution.
+
+        This method is kept for backward compatibility but is no longer used
+        as we've migrated to native asyncio execution (no separate workers).
 
         Args:
-            worker_hostname: Hostname of worker processing the task
+            worker_hostname: DEPRECATED: Was hostname of worker processing the task
         """
         self.worker_hostname = worker_hostname
 

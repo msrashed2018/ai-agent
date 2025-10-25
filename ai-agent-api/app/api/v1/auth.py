@@ -25,6 +25,7 @@ from app.schemas.auth import (
     LoginResponse,
     RefreshTokenRequest,
     TokenResponse,
+    UserResponse,
 )
 from app.services.token_service import TokenService, get_token_service
 
@@ -142,11 +143,24 @@ async def login(
     )
     logger.info(f"Login successful for user {user.email}")
 
+    # Import UserResponse here to avoid circular imports
+    from app.schemas.auth import UserResponse
+
+    user_response = UserResponse(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        role=user.role,
+        is_active=user.is_active,
+        created_at=user.created_at,
+    )
+
     return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.jwt_access_token_expire_minutes * 60,
+        user=user_response,
     )
 
 
@@ -239,18 +253,20 @@ async def logout_all_sessions(
     }
 
 
-@router.get("/me", response_model=dict)
+@router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
     current_user: User = Depends(get_current_active_user),
-) -> dict:
+) -> UserResponse:
     """
     Get current authenticated user information.
 
     Returns user profile from JWT token.
     """
-    return {
-        "id": str(current_user.id),
-        "email": current_user.email,
-        "role": current_user.role,
-        "created_at": current_user.created_at.isoformat(),
-    }
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        username=current_user.username,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at,
+    )

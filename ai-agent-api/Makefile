@@ -3,8 +3,9 @@
 .PHONY: api-start api-stop api-restart api-logs
 .PHONY: start-all stop-all restart-all start stop restart status
 .PHONY: task-list task-create task-execute task-status
-.PHONY: execution-status execution-monitor session-monitor
-.PHONY: login celery-inspect
+.PHONY: execution-status execution-monitor
+.PHONY: login
+.PHONY: db-tables db-show db-count
 
 # ============================================================================
 # HELP
@@ -47,14 +48,13 @@ setup: install docker-up migrate seed ## Complete first-time setup
 	@echo "✅ Setup complete! Run 'make start' to begin."
 
 # ============================================================================
-# DOCKER INFRASTRUCTURE (Postgres, Redis, Celery)
+# DOCKER INFRASTRUCTURE (Postgres, Redis)
 # ============================================================================
 
-infra-start: ## Start Docker infrastructure (Postgres + Redis + Celery)
+infra-start: ## Start Docker infrastructure (Postgres + Redis)
 	@echo "Starting Docker infrastructure..."
 	docker compose -f docker-compose.dev.yml up -d
-	@echo "✅ Infrastructure started (Postgres, Redis, Celery)"
-	@echo "   Celery workers are installing dependencies on first start..."
+	@echo "✅ Infrastructure started (Postgres, Redis)"
 	@echo "   Run 'make api-start' to start the API locally"
 
 infra-stop: ## Stop Docker infrastructure
@@ -82,12 +82,13 @@ infra-clean: ## Remove all containers and volumes (WARNING: deletes data)
 api-start: ## Start API server locally (use 'make start-all' to start everything)
 	@mkdir -p logs
 	@echo "Starting API server locally..."
-	@nohup poetry run uvicorn main:app --reload --host 0.0.0.0 --port 8000 > logs/api.log 2>&1 & echo $$! > .api.pid
+	@nohup poetry run uvicorn main:app --reload --reload-exclude="scripts/*" --reload-exclude="*.pyc" --reload-exclude="__pycache__" --host 0.0.0.0 --port 8000 > logs/api.log 2>&1 & echo $$! > .api.pid
 	@sleep 2
 	@echo "✅ API server started"
 	@echo "   API: http://localhost:8000"
 	@echo "   Docs: http://localhost:8000/docs"
 	@echo "   Logs: make api-logs"
+	@echo "   Note: Script changes won't trigger reload (excluded: scripts/*, *.pyc, __pycache__)"
 
 api-stop: ## Stop API server only
 	@echo "Stopping API server..."
@@ -166,6 +167,35 @@ db-reset: ## Reset database (WARNING: destroys all data)
 	@sleep 5
 	alembic upgrade head
 	poetry run python seed_db.py
+
+db-tables: ## List all tables in the database
+	@echo "$(CYAN)Database Tables:$(NC)"
+	@PGPASSWORD=password psql -P pager=off -h localhost -U aiagent -d aiagent_db -c "\dt"
+
+db-show: ## Show all data from a table (usage: make db-show TABLE=users [LIMIT=10])
+	@if [ -z "$(TABLE)" ]; then \
+		echo "$(RED)Error: TABLE parameter required$(NC)"; \
+		echo "Usage: make db-show TABLE=<table_name> [LIMIT=number]"; \
+		echo "Example: make db-show TABLE=users"; \
+		echo "Example: make db-show TABLE=users LIMIT=10"; \
+		exit 1; \
+	fi
+	@echo "$(CYAN)Showing data from table: $(TABLE)$(NC)"
+	@if [ -n "$(LIMIT)" ]; then \
+		PGPASSWORD=password psql -P pager=off -h localhost -U aiagent -d aiagent_db -c "\x" -c "SELECT * FROM $(TABLE) LIMIT $(LIMIT);"; \
+	else \
+		PGPASSWORD=password psql -P pager=off -h localhost -U aiagent -d aiagent_db -c "\x" -c "SELECT * FROM $(TABLE);"; \
+	fi
+
+db-count: ## Count rows in a table (usage: make db-count TABLE=users)
+	@if [ -z "$(TABLE)" ]; then \
+		echo "$(RED)Error: TABLE parameter required$(NC)"; \
+		echo "Usage: make db-count TABLE=<table_name>"; \
+		echo "Example: make db-count TABLE=users"; \
+		exit 1; \
+	fi
+	@echo "$(CYAN)Row count for table: $(TABLE)$(NC)"
+	@PGPASSWORD=password psql -P pager=off -h localhost -U aiagent -d aiagent_db -c "SELECT COUNT(*) as total_rows FROM $(TABLE);"
 
 # ============================================================================
 # DEVELOPMENT
@@ -254,31 +284,8 @@ execution-logs: ## Show execution logs (usage: make execution-logs EXEC_ID=<id>)
 	fi
 	@python3 scripts/aiagent.py execution logs $(EXEC_ID)
 
-session-monitor: ## Monitor session (usage: make session-monitor SESSION_ID=<id>)
-	@if [ -z "$(SESSION_ID)" ]; then \
-		echo "Usage: make session-monitor SESSION_ID=<session-id>"; \
-		exit 1; \
-	fi
-	@python3 scripts/aiagent.py session monitor $(SESSION_ID)
-
-session-messages: ## List session messages (usage: make session-messages SESSION_ID=<id>)
-	@if [ -z "$(SESSION_ID)" ]; then \
-		echo "Usage: make session-messages SESSION_ID=<session-id>"; \
-		exit 1; \
-	fi
-	@python3 scripts/aiagent.py session messages $(SESSION_ID)
-
-# ============================================================================
-# CELERY
-# ============================================================================
-
-celery-inspect: ## Inspect Celery worker status
-	@docker compose exec celery-worker celery -A app.celery_app inspect active || echo "Worker not available"
-	@echo ""
-	@docker compose exec celery-worker celery -A app.celery_app inspect registered || echo "Worker not available"
-
-celery-logs: ## View Celery worker logs
-	docker compose logs -f celery-worker
+# session-monitor: ## REMOVED - Using tasks API only
+# session-messages: ## REMOVED - Using tasks API only
 
 # ============================================================================
 # COLORS

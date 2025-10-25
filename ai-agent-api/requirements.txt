@@ -14,9 +14,6 @@ psycopg2-binary==2.9.9
 redis[hiredis]==5.0.1
 hiredis==2.3.2
 
-# Celery
-celery==5.3.6
-
 # Claude SDK
 claude-agent-sdk==0.1.4
 

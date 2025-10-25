@@ -80,20 +80,19 @@ class SessionModel(Base):
     deleted_at = Column(DateTime(timezone=True))
     
     # Relationships
-    user = relationship("UserModel", back_populates="sessions")
-    messages = relationship("MessageModel", back_populates="session", cascade="all, delete-orphan")
-    tool_calls = relationship("ToolCallModel", back_populates="session", cascade="all, delete-orphan")
-    task_executions = relationship("TaskExecutionModel", back_populates="session")
-    reports = relationship("ReportModel", back_populates="session")
-    working_directory = relationship("WorkingDirectoryModel", back_populates="session", uselist=False)
-    audit_logs = relationship("AuditLogModel", back_populates="session")
-
-    # Phase 1 - New Relationships
-    hook_executions = relationship("HookExecutionModel", back_populates="session", cascade="all, delete-orphan")
-    permission_decisions = relationship("PermissionDecisionModel", back_populates="session", cascade="all, delete-orphan")
-    archive = relationship("WorkingDirectoryArchiveModel", back_populates="session", foreign_keys="WorkingDirectoryArchiveModel.session_id", uselist=False)
-    template = relationship("SessionTemplateModel", foreign_keys=[template_id], back_populates="sessions")
-    metrics_snapshots = relationship("SessionMetricsSnapshotModel", back_populates="session", cascade="all, delete-orphan")
+    user = relationship("UserModel")
+    # Relationships with back_populates removed - SessionModel being phased out
+    # These foreign keys still exist for database integrity:
+    # - messages (session_id FK)
+    # - tool_calls (session_id FK)
+    # - task_executions (session_id FK)
+    # - reports (session_id FK)
+    # - working_directory (session_id FK)
+    # - audit_logs (session_id FK)
+    # - hook_executions (session_id FK)
+    # - permission_decisions (session_id FK)
+    # - archive (session_id FK)
+    # - metrics_snapshots (session_id FK)
     
     # Constraints
     __table_args__ = (

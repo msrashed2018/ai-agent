@@ -1,5 +1,6 @@
 """Database session management."""
 from typing import AsyncGenerator
+from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
 from app.core.config import settings
@@ -34,6 +35,24 @@ AsyncSessionLocal = async_sessionmaker(
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting async database session."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+@asynccontextmanager
+async def get_async_session_context() -> AsyncGenerator[AsyncSession, None]:
+    """Context manager for getting async database session.
+
+    Useful for Celery tasks and other non-FastAPI contexts where
+    we need an async context manager instead of a FastAPI dependency.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session

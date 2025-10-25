@@ -12,7 +12,6 @@ const REPORTS_QUERY_KEY = 'reports';
 const REPORT_QUERY_KEY = 'report';
 
 interface UseReportsParams extends PaginationParams {
-  session_id?: string;
   report_type?: string;
 }
 

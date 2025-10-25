@@ -40,7 +40,8 @@ class WorkingDirectoryArchiveModel(Base):
     completed_at = Column(DateTime(timezone=True))
 
     # Relationships
-    session = relationship("SessionModel", back_populates="archive", foreign_keys=[session_id])
+    # session relationship removed (SessionModel being phased out)
+    # Session reference available via session_id foreign key
 
     # Constraints and Indexes
     __table_args__ = (

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useReports } from '@/hooks/use-reports';
-import { useSessions } from '@/hooks/use-sessions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,16 +12,13 @@ export default function ReportsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterFormat, setFilterFormat] = useState<string>('all');
-  const [filterSession, setFilterSession] = useState<string>('all');
 
   // Build query params
   const queryParams = {
     report_type: filterType === 'all' ? undefined : filterType,
-    session_id: filterSession === 'all' ? undefined : filterSession,
   };
 
   const { data: reportsData, isLoading } = useReports(queryParams);
-  const { data: sessionsData } = useSessions({ page_size: 100 });
 
   // Client-side filtering for search and format
   const filteredReports = reportsData?.items?.filter((report) => {
@@ -65,7 +61,7 @@ export default function ReportsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Search</label>
               <div className="relative">
@@ -107,23 +103,6 @@ export default function ReportsPage() {
                   <SelectItem value="pdf">PDF</SelectItem>
                   <SelectItem value="json">JSON</SelectItem>
                   <SelectItem value="markdown">Markdown</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Session</label>
-              <Select value={filterSession} onValueChange={setFilterSession}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sessions</SelectItem>
-                  {sessionsData?.items?.map((session) => (
-                    <SelectItem key={session.id} value={session.id}>
-                      {session.name || `Session ${session.id.slice(0, 8)}...`}
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </div>

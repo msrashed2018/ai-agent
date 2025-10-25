@@ -34,7 +34,8 @@ class PermissionDecisionModel(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, index=True)
 
     # Relationships
-    session = relationship("SessionModel", back_populates="permission_decisions")
+    # session relationship removed (SessionModel being phased out)
+    # Session references available via session_id foreign key
     tool_call = relationship("ToolCallModel")
 
     # Constraints and Indexes

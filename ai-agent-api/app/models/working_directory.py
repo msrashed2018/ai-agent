@@ -37,7 +37,8 @@ class WorkingDirectoryModel(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    session = relationship("SessionModel", back_populates="working_directory", uselist=False)
+    # session relationship removed (SessionModel being phased out)
+    # Session reference available via session_id foreign key
     
     # Indexes
     __table_args__ = (
